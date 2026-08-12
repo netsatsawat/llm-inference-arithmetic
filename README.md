@@ -4,6 +4,9 @@
 model downloads, no GPU. Every function is short enough to read, because the point
 is that you check it rather than trust it.
 
+**[Run the calculators in your browser →](https://netsatsawat.github.io/llm-inference-arithmetic/)**
+Same arithmetic, no install, nothing sent anywhere.
+
 Companion to the series *LLM Inference, Measured* — [satsawat.ai](https://satsawat.ai).
 
 ```bash
@@ -134,6 +137,17 @@ discordant counts and almost never does.
 intervals overlap by 0.07 of a point and the difference is still significant at
 p = 0.008. Non-overlap proves significance; overlap proves nothing. The test suite
 here caught that exact error in a chart caption.
+
+## Two implementations, on purpose
+
+`docs/index.html` is the same five calculations in JavaScript, written independently and
+served as a static page. That redundancy is the point: the two were compared field by
+field and disagreed on one, the Wilson interval, because the browser version snapped the
+percentage back to a whole number of items and the Python did not. 39.02% of 164 is 64
+items, and the interval belongs to 64/164 rather than to 0.3902. The Python was changed
+to match, and a test now pins it.
+
+A single implementation cannot catch that class of mistake. Two can.
 
 ## Tests assert the published claims
 

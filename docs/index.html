@@ -1,0 +1,466 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLM inference arithmetic — run the numbers</title>
+<meta name="description" content="The four calculations that decide LLM serving performance, as live calculators. Roofline, KV cache, capacity, Amdahl, and whether your benchmark can prove its own claim.">
+<style>
+  :root{
+    --cloth:#0B0C0E; --band:#171A1F; --band2:#1E2128; --well:#101318;
+    --rule:rgba(237,234,227,.16); --faint:rgba(237,234,227,.06);
+    --ink:#EDEAE3; --ink2:#B9B5AC; --ink3:#8B8880;
+    --gold:#D4A843; --gold-ink:#A88434; --gold-deep:#8A6B24; --cool:#6E9FD4;
+    --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cloth);color:var(--ink2);font-family:var(--sans);
+       font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:60rem;margin:0 auto;padding:0 1.25rem 5rem}
+  header{padding:3.5rem 0 1.5rem}
+  .kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;color:var(--gold-ink);
+          text-transform:uppercase}
+  h1{font-size:2.3rem;line-height:1.1;letter-spacing:-.03em;color:var(--ink);margin:.5rem 0 .6rem}
+  header p{max-width:44rem;margin:0}
+  a{color:var(--gold);text-decoration:none;border-bottom:1px solid rgba(212,168,67,.35)}
+  a:hover{border-bottom-color:var(--gold)}
+
+  .card{background:var(--band);border:1px solid var(--rule);border-radius:8px;
+        padding:1.5rem 1.5rem 1.25rem;margin:1.5rem 0}
+  .card h2{font-size:1.25rem;color:var(--ink);margin:0 0 .2rem;letter-spacing:-.01em}
+  .card .why{font-size:.92rem;color:var(--ink3);margin:0 0 1.25rem}
+
+  .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem 1.25rem}
+  label{display:block;font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;
+        text-transform:uppercase;color:var(--ink3);margin-bottom:.35rem}
+  input[type=number],select{width:100%;background:var(--well);color:var(--ink);
+        border:1px solid var(--rule);border-radius:4px;padding:.5rem .6rem;
+        font-family:var(--mono);font-size:.95rem}
+  input[type=range]{width:100%;accent-color:var(--gold);background:transparent}
+  .rangeval{font-family:var(--mono);color:var(--gold);font-size:.95rem}
+
+  .out{margin-top:1.4rem;border-top:1px solid var(--rule);padding-top:1.1rem}
+  .rows{display:grid;grid-template-columns:1fr auto;gap:.35rem 1rem;font-family:var(--mono);font-size:.95rem}
+  .rows dt{color:var(--ink3)}
+  .rows dd{margin:0;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+  .rows dd.big{color:var(--gold);font-size:1.15rem;font-weight:700}
+  .verdict{margin-top:1rem;padding:.8rem 1rem;border-radius:5px;font-size:.95rem;
+           background:var(--band2);border-left:3px solid var(--ink3)}
+  .verdict.good{border-left-color:var(--gold);color:var(--ink)}
+  .verdict.bad{border-left-color:var(--cool);color:var(--ink)}
+  figure{margin:1.25rem 0 0}
+  svg{display:block;width:100%;height:auto;overflow:visible}
+  .note{font-size:.85rem;color:var(--ink3);margin-top:.9rem}
+  code{font-family:var(--mono);font-size:.9em;background:var(--band2);padding:.1rem .35rem;border-radius:3px}
+  footer{border-top:1px solid var(--rule);margin-top:3rem;padding-top:1.5rem;font-size:.9rem;color:var(--ink3)}
+  @media (max-width:640px){h1{font-size:1.8rem}.card{padding:1.1rem}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">llm-inference-arithmetic</div>
+  <h1>Run the numbers yourself.</h1>
+  <p>Five calculations that decide what an LLM deployment costs and how fast it feels.
+  Everything below runs in this page &mdash; no server, no GPU, no model download. The same
+  arithmetic is in the <a href="https://github.com/netsatsawat/llm-inference-arithmetic">Python
+  package</a>, and its test suite asserts these figures, so if the two ever disagree one of
+  them is wrong.</p>
+</header>
+
+<!-- ── 1. roofline ────────────────────────────────────────────────────────── -->
+<section class="card">
+  <h2>1. Are you memory-bound?</h2>
+  <p class="why">Peak arithmetic rate divided by memory bandwidth gives the <em>ridge point</em>:
+  the operations-per-byte below which you are paying to move bytes rather than to multiply them.
+  In decode, your arithmetic intensity is roughly your batch size.</p>
+
+  <div class="controls">
+    <div>
+      <label for="rf-gpu">GPU</label>
+      <select id="rf-gpu"></select>
+    </div>
+    <div>
+      <label for="rf-batch">Batch size <span class="rangeval" id="rf-batch-v">32</span></label>
+      <input type="range" id="rf-batch" min="1" max="1024" value="32">
+    </div>
+    <div>
+      <label for="rf-bytes">Bytes per weight</label>
+      <select id="rf-bytes">
+        <option value="2" selected>2 &mdash; BF16/FP16</option>
+        <option value="1">1 &mdash; FP8</option>
+        <option value="0.5">0.5 &mdash; INT4/FP4</option>
+      </select>
+    </div>
+  </div>
+
+  <figure><svg id="rf-chart" viewBox="0 0 720 300" role="img"
+    aria-label="Roofline chart with your current batch marked"></svg></figure>
+
+  <div class="out">
+    <dl class="rows">
+      <dt>ridge point</dt><dd id="rf-ridge">&mdash;</dd>
+      <dt>your arithmetic intensity</dt><dd id="rf-int">&mdash;</dd>
+      <dt>achievable</dt><dd class="big" id="rf-pct">&mdash;</dd>
+    </dl>
+    <div class="verdict" id="rf-verdict"></div>
+    <p class="note">Intensity is batch &times; (2 &divide; bytes-per-weight), so it equals the
+    batch only at 2-byte weights. Peak figures are <em>dense</em>: vendors often publish the
+    with-sparsity number, which is double.</p>
+  </div>
+</section>
+
+<!-- ── 2. kv cache ────────────────────────────────────────────────────────── -->
+<section class="card">
+  <h2>2. What one conversation costs</h2>
+  <p class="why">Two, times the layers whose cache grows, times the key-value heads, times the
+  head dimension, times the bytes per number. Every value is in the model's
+  <code>config.json</code>.</p>
+
+  <div class="controls">
+    <div><label for="kv-layers">Layers that grow</label><input type="number" id="kv-layers" value="18" min="1"></div>
+    <div><label for="kv-heads">Key-value heads</label><input type="number" id="kv-heads" value="8" min="1"></div>
+    <div><label for="kv-dim">Head dimension</label><input type="number" id="kv-dim" value="64" min="1"></div>
+    <div>
+      <label for="kv-dtype">Cache precision</label>
+      <select id="kv-dtype"><option value="2" selected>16-bit</option><option value="1">8-bit</option></select>
+    </div>
+  </div>
+
+  <div class="out">
+    <dl class="rows">
+      <dt>per token</dt><dd class="big" id="kv-tok">&mdash;</dd>
+    </dl>
+    <figure><svg id="kv-chart" viewBox="0 0 720 170" role="img"
+      aria-label="Cache size per conversation at four context lengths"></svg></figure>
+    <p class="note"><strong>Read <code>layer_types</code> before you trust the layer count.</strong>
+    Models that interleave sliding-window attention only grow the cache on their full-attention
+    layers. gpt-oss-120b has 36 layers and 18 of them grow, so using 36 doubles your answer.</p>
+  </div>
+</section>
+
+<!-- ── 3. capacity ────────────────────────────────────────────────────────── -->
+<section class="card">
+  <h2>3. Does your target concurrency fit?</h2>
+  <p class="why">Total memory, minus the weights, divided by what one conversation costs. This
+  belongs in every capacity plan and is almost never in one.</p>
+
+  <div class="controls">
+    <div><label for="cp-gpus">Number of GPUs</label><input type="number" id="cp-gpus" value="2" min="1"></div>
+    <div><label for="cp-gpugb">GB per GPU</label><input type="number" id="cp-gpugb" value="80" min="1"></div>
+    <div><label for="cp-weights">Weights, GB</label><input type="number" id="cp-weights" value="61.6" step="0.1"></div>
+    <div><label for="cp-util">Utilisation</label><input type="number" id="cp-util" value="0.92" step="0.01" min="0.1" max="1"></div>
+    <div>
+      <label for="cp-ctx">Context <span class="rangeval" id="cp-ctx-v">128K</span></label>
+      <input type="range" id="cp-ctx" min="10" max="17" value="17">
+    </div>
+    <div><label for="cp-target">Concurrency you need</label><input type="number" id="cp-target" value="32" min="1"></div>
+  </div>
+
+  <div class="out">
+    <dl class="rows">
+      <dt>KV budget</dt><dd id="cp-budget">&mdash;</dd>
+      <dt>per conversation</dt><dd id="cp-per">&mdash;</dd>
+      <dt>conversations that fit</dt><dd class="big" id="cp-fits">&mdash;</dd>
+    </dl>
+    <div class="verdict" id="cp-verdict"></div>
+    <p class="note">Uses the cache size from calculator 2 above, so change the model there and
+    this follows. Utilisation defaults to vLLM's <code>gpu_memory_utilization</code> of 0.92, and
+    5 GiB is held back for activations and CUDA graphs.</p>
+  </div>
+</section>
+
+<!-- ── 4. amdahl ──────────────────────────────────────────────────────────── -->
+<section class="card">
+  <h2>4. What is that kernel speedup actually worth?</h2>
+  <p class="why">A kernel that runs twice as fast only helps in proportion to how much of your
+  time was spent in it. The speedup you were quoted was measured on somebody else's workload.</p>
+
+  <div class="controls">
+    <div>
+      <label for="am-p">Share of time in that part <span class="rangeval" id="am-p-v">18%</span></label>
+      <input type="range" id="am-p" min="1" max="99" value="18">
+    </div>
+    <div>
+      <label for="am-s">Kernel speedup <span class="rangeval" id="am-s-v">2.0&times;</span></label>
+      <input type="range" id="am-s" min="11" max="100" value="20">
+    </div>
+  </div>
+
+  <div class="out">
+    <dl class="rows">
+      <dt>end to end</dt><dd class="big" id="am-out">&mdash;</dd>
+      <dt>ceiling, if that part became free</dt><dd id="am-ceil">&mdash;</dd>
+      <dt>speedup needed for 1.5&times; overall</dt><dd id="am-need">&mdash;</dd>
+    </dl>
+    <div class="verdict" id="am-verdict"></div>
+  </div>
+</section>
+
+<!-- ── 5. evaluation statistics ───────────────────────────────────────────── -->
+<section class="card">
+  <h2>5. Can the benchmark prove its own claim?</h2>
+  <p class="why">Convert the percentages back into items before you believe anything. A dozen
+  items is not a finding, however large the percentage gap looks.</p>
+
+  <div class="controls">
+    <div><label for="ev-a">Baseline score, %</label><input type="number" id="ev-a" value="39.02" step="0.01"></div>
+    <div><label for="ev-b">Comparison score, %</label><input type="number" id="ev-b" value="31.10" step="0.01"></div>
+    <div><label for="ev-n">Items in the benchmark</label><input type="number" id="ev-n" value="164" min="2"></div>
+  </div>
+
+  <div class="out">
+    <dl class="rows">
+      <dt>counts</dt><dd id="ev-counts">&mdash;</dd>
+      <dt>difference</dt><dd id="ev-diff">&mdash;</dd>
+      <dt>95% interval, baseline</dt><dd id="ev-cia">&mdash;</dd>
+      <dt>95% interval, comparison</dt><dd id="ev-cib">&mdash;</dd>
+      <dt>two-proportion p</dt><dd class="big" id="ev-p">&mdash;</dd>
+    </dl>
+    <div class="verdict" id="ev-verdict"></div>
+    <p class="note">Overlapping intervals prove nothing. Non-overlap implies significance;
+    overlap does not imply its absence. If both models were scored on the same items the
+    correct test is McNemar's, which needs to know which items each one got wrong &mdash; and a
+    published percentage never carries that.</p>
+  </div>
+</section>
+
+<footer>
+  <p>The same arithmetic as a library and a CLI:
+  <a href="https://github.com/netsatsawat/llm-inference-arithmetic">github.com/netsatsawat/llm-inference-arithmetic</a>.
+  MIT, no dependencies.</p>
+  <p>Companion to the series <em>LLM Inference, Measured</em> &mdash;
+  <a href="https://satsawat.ai">satsawat.ai</a>.</p>
+</footer>
+
+</div>
+
+<script>
+"use strict";
+const GIB = 1024 ** 3;
+const $ = (id) => document.getElementById(id);
+const fmt = (x, d = 0) => x.toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d});
+
+/* Dense BF16 peak and HBM bandwidth. Dense, not the with-sparsity number vendors lead with. */
+const GPUS = {
+  "h100-sxm":  {label: "H100 SXM",   tflops: 990,  bw: 3.35, mem: 80},
+  "h100-pcie": {label: "H100 PCIe",  tflops: 756,  bw: 2.00, mem: 80},
+  "h200":      {label: "H200 SXM",   tflops: 990,  bw: 4.80, mem: 141},
+  "a100-80":   {label: "A100 80GB",  tflops: 312,  bw: 2.04, mem: 80},
+  "l40s":      {label: "L40S",       tflops: 362,  bw: 0.864, mem: 48},
+};
+
+/* ── 1. roofline ──────────────────────────────────────────────────────────── */
+const rfGpu = $("rf-gpu");
+for (const [k, g] of Object.entries(GPUS)) {
+  const o = document.createElement("option");
+  o.value = k; o.textContent = `${g.label} — ${g.tflops} TFLOP/s, ${g.bw} TB/s`;
+  rfGpu.appendChild(o);
+}
+
+function drawRoofline(ridge, intensity) {
+  const W = 720, H = 300, L = 62, R = 20, T = 16, B = 44;
+  const x0 = L, x1 = W - R, y0 = H - B, y1 = T;
+  // log10 axes: intensity 1..10^4, achievable 1..10^3 (normalised to peak = 1000)
+  const lx = (v) => x0 + (Math.log10(Math.max(v, 1)) / 4) * (x1 - x0);
+  const ly = (v) => y0 - (Math.log10(Math.max(v, 1)) / 3) * (y0 - y1);
+  const peak = 1000;
+  const achievable = (i) => Math.min(peak, (i / ridge) * peak);
+
+  let s = "";
+  for (let d = 0; d <= 4; d++) {
+    s += `<line x1="${lx(10 ** d)}" y1="${y0}" x2="${lx(10 ** d)}" y2="${y1}"
+            stroke="var(--faint)"/>
+          <text x="${lx(10 ** d)}" y="${y0 + 20}" text-anchor="middle"
+            style="font:11px var(--mono);fill:var(--ink3)">10^${d}</text>`;
+  }
+  // the roof: a ramp to the ridge, flat after it
+  s += `<path d="M ${lx(1)} ${ly(achievable(1))} L ${lx(ridge)} ${ly(peak)} L ${lx(10000)} ${ly(peak)}"
+          fill="none" stroke="var(--ink3)" stroke-width="2"/>`;
+  s += `<line x1="${lx(ridge)}" y1="${y0}" x2="${lx(ridge)}" y2="${ly(peak)}"
+          stroke="var(--gold-deep)" stroke-width="1.5" stroke-dasharray="5 4"/>
+        <text x="${lx(ridge) + 8}" y="${y1 + 14}"
+          style="font:11px var(--mono);fill:var(--gold-deep)">ridge ${fmt(ridge)}</text>`;
+  // attention never moves: it sits near intensity 8 on a GQA-8 model, wherever the batch goes
+  s += `<circle cx="${lx(8)}" cy="${ly(achievable(8))}" r="5" fill="var(--cool)"/>
+        <text x="${lx(8) + 10}" y="${ly(achievable(8)) + 4}"
+          style="font:11px var(--sans);fill:var(--cool)">attention, whatever the batch</text>`;
+  // where you are
+  const a = achievable(intensity);
+  s += `<circle cx="${lx(intensity)}" cy="${ly(a)}" r="7" fill="var(--gold)"/>`;
+  s += `<text x="${x0}" y="${y0 + 38}" style="font:11px var(--sans);fill:var(--ink3)">arithmetic intensity — FLOP per byte moved</text>`;
+  $("rf-chart").innerHTML = s;
+}
+
+function roofline() {
+  const g = GPUS[rfGpu.value];
+  const batch = +$("rf-batch").value;
+  const bytes = +$("rf-bytes").value;
+  const ridge = g.tflops / g.bw;
+  const intensity = batch * (2 / bytes);
+  const pct = Math.min(100, (intensity / ridge) * 100);
+
+  $("rf-batch-v").textContent = batch;
+  $("rf-ridge").textContent = `${fmt(ridge, 1)} FLOP/byte`;
+  $("rf-int").textContent = fmt(intensity, 0);
+  $("rf-pct").textContent = pct < 1 ? "<1% of peak" : `${fmt(pct, 0)}% of peak`;
+
+  const v = $("rf-verdict");
+  if (intensity >= ridge) {
+    v.className = "verdict good";
+    v.textContent = "Compute-bound. The arithmetic is the limit, which is where you want to be.";
+  } else {
+    v.className = "verdict bad";
+    const need = Math.ceil(ridge / (2 / bytes));
+    v.textContent = `Memory-bound. You are moving bytes, not multiplying them. Reaching the ridge would take a batch of ${fmt(need)} — and attention never gets there whatever you do.`;
+  }
+  drawRoofline(ridge, intensity);
+}
+
+/* ── 2. kv cache ──────────────────────────────────────────────────────────── */
+const CONTEXTS = [4096, 8192, 32768, 131072];
+function kvPerToken() {
+  return 2 * +$("kv-layers").value * +$("kv-heads").value * +$("kv-dim").value * +$("kv-dtype").value;
+}
+function sizeStr(gib) {
+  return gib < 1 ? `${fmt(gib * 1024, 0)} MiB` : `${fmt(gib, gib < 10 ? 2 : 1)} GiB`;
+}
+function kv() {
+  const per = kvPerToken();
+  $("kv-tok").textContent = `${fmt(per)} bytes = ${fmt(per / 1024, 0)} KiB`;
+
+  const W = 720, H = 170, L = 74, T = 10, rowH = 34;
+  const max = (per * CONTEXTS[CONTEXTS.length - 1]) / GIB;
+  let s = "";
+  CONTEXTS.forEach((c, i) => {
+    const gib = (per * c) / GIB;
+    const y = T + i * rowH;
+    const w = Math.max(2, (gib / max) * (W - L - 130));
+    s += `<text x="0" y="${y + 17}" style="font:12px var(--mono);fill:var(--ink3)">${c / 1024}K</text>
+          <rect x="${L}" y="${y}" width="${w}" height="22" rx="2" fill="var(--gold)"/>
+          <text x="${L + w + 10}" y="${y + 17}"
+            style="font:12px var(--mono);fill:var(--ink)">${sizeStr(gib)}</text>`;
+  });
+  $("kv-chart").innerHTML = s;
+  capacity();
+}
+
+/* ── 3. capacity ──────────────────────────────────────────────────────────── */
+function capacity() {
+  const ctxPow = +$("cp-ctx").value;
+  const ctx = 2 ** ctxPow;
+  $("cp-ctx-v").textContent = ctx >= 1024 ? `${ctx / 1024}K` : ctx;
+
+  const totalGb = +$("cp-gpus").value * +$("cp-gpugb").value;
+  const util = +$("cp-util").value;
+  const weights = +$("cp-weights").value;
+  const budget = Math.max(0, ((totalGb * util - weights) * 1e9) / GIB - 5);
+  const per = (kvPerToken() * ctx) / GIB;
+  const fits = per > 0 ? Math.floor(budget / per) : 0;
+  const target = +$("cp-target").value;
+  const ridge = GPUS[rfGpu.value].tflops / GPUS[rfGpu.value].bw;
+
+  $("cp-budget").textContent = `${fmt(budget, 1)} GiB`;
+  $("cp-per").textContent = sizeStr(per);
+  $("cp-fits").textContent = fmt(fits);
+
+  const v = $("cp-verdict");
+  if (fits < target) {
+    v.className = "verdict bad";
+    v.textContent = `SHORT by ${fmt(target - fits)}. No engine tuning rescues this: you need more memory, a smaller cache, or a shorter context.`;
+  } else if (fits < ridge) {
+    v.className = "verdict bad";
+    v.textContent = `Fits, but ${fmt(fits)} is under the ridge of ${fmt(ridge, 0)}. You will be bandwidth-bound — paying for arithmetic you cannot reach.`;
+  } else {
+    v.className = "verdict good";
+    v.textContent = `Fits, and ${fmt(fits)} clears the ridge of ${fmt(ridge, 0)}.`;
+  }
+}
+
+/* ── 4. amdahl ────────────────────────────────────────────────────────────── */
+function amdahl() {
+  const p = +$("am-p").value / 100;
+  const s = +$("am-s").value / 10;
+  $("am-p-v").textContent = `${fmt(p * 100, 0)}%`;
+  $("am-s-v").textContent = `${fmt(s, 1)}×`;
+
+  const end = 1 / ((1 - p) + p / s);
+  const ceil = 1 / (1 - p);
+  $("am-out").textContent = `${fmt(end, 2)}×`;
+  $("am-ceil").textContent = `${fmt(ceil, 2)}×`;
+
+  // s needed for a 1.5x overall win, if it is reachable at all
+  const want = 1.5;
+  const need = ceil <= want ? null : p / (1 / want - (1 - p));
+  $("am-need").textContent = need === null
+    ? `impossible — the ceiling is ${fmt(ceil, 2)}×`
+    : `${fmt(need, 1)}×`;
+
+  const v = $("am-verdict");
+  v.className = end >= 1.25 ? "verdict good" : "verdict bad";
+  v.textContent = `A ${fmt(s, 1)}× kernel on ${fmt(p * 100, 0)}% of your time is ${fmt(end, 2)}× end to end. `
+    + (end < 1.15
+      ? "That is close to nothing, and it is why speedups do not transfer between workloads."
+      : "Worth having — but the number a vendor quotes is their p, not yours.");
+}
+
+/* ── 5. evaluation statistics ─────────────────────────────────────────────── */
+function erf(x) {                       // Abramowitz & Stegun 7.1.26
+  const s = Math.sign(x); x = Math.abs(x);
+  const t = 1 / (1 + 0.3275911 * x);
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+                - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return s * y;
+}
+const normCdf = (z) => 0.5 * (1 + erf(z / Math.SQRT2));
+
+function wilson(x, n, z = 1.959964) {
+  const p = x / n, d = 1 + (z * z) / n;
+  const c = (p + (z * z) / (2 * n)) / d;
+  const h = (z / d) * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
+  return [Math.max(0, c - h) * 100, Math.min(1, c + h) * 100];
+}
+
+function evalStats() {
+  const n = Math.max(2, +$("ev-n").value);
+  const a = +$("ev-a").value / 100, b = +$("ev-b").value / 100;
+  const xa = Math.round(a * n), xb = Math.round(b * n);
+  $("ev-counts").textContent = `${xa} and ${xb} of ${fmt(n)}`;
+  $("ev-diff").textContent = `${fmt(Math.abs(xa - xb))} item${Math.abs(xa - xb) === 1 ? "" : "s"}`;
+
+  const [la, ua] = wilson(xa, n), [lb, ub] = wilson(xb, n);
+  $("ev-cia").textContent = `[${fmt(la, 2)}, ${fmt(ua, 2)}]`;
+  $("ev-cib").textContent = `[${fmt(lb, 2)}, ${fmt(ub, 2)}]`;
+
+  const pool = (xa + xb) / (2 * n);
+  const se = Math.sqrt(pool * (1 - pool) * (2 / n));
+  const z = se > 0 ? (xa / n - xb / n) / se : 0;
+  const pv = 2 * (1 - normCdf(Math.abs(z)));
+  $("ev-p").textContent = pv < 0.001 ? "< 0.001" : fmt(pv, 3);
+
+  const overlap = !(ua < lb || ub < la);
+  const v = $("ev-verdict");
+  if (pv < 0.05) {
+    v.className = "verdict good";
+    v.textContent = `p = ${pv < 0.001 ? "< 0.001" : fmt(pv, 3)}. The difference clears a conventional test`
+      + (overlap ? " — and the intervals still overlap, which is why overlap proves nothing." : ".");
+  } else {
+    v.className = "verdict bad";
+    v.textContent = `p = ${fmt(pv, 3)}. Not established. A gap of ${fmt(Math.abs(xa - xb))} items on ${fmt(n)} `
+      + "is inside what chance produces. The effect may well be real; this benchmark cannot show it.";
+  }
+}
+
+/* ── wire it up ───────────────────────────────────────────────────────────── */
+["rf-gpu", "rf-batch", "rf-bytes"].forEach((id) => $(id).addEventListener("input", () => { roofline(); capacity(); }));
+["kv-layers", "kv-heads", "kv-dim", "kv-dtype"].forEach((id) => $(id).addEventListener("input", kv));
+["cp-gpus", "cp-gpugb", "cp-weights", "cp-util", "cp-ctx", "cp-target"].forEach((id) => $(id).addEventListener("input", capacity));
+["am-p", "am-s"].forEach((id) => $(id).addEventListener("input", amdahl));
+["ev-a", "ev-b", "ev-n"].forEach((id) => $(id).addEventListener("input", evalStats));
+
+roofline(); kv(); amdahl(); evalStats();
+</script>
+</body>
+</html>

@@ -258,8 +258,14 @@ def wilson_interval(pct: float, n: int, z: float = 1.959964) -> tuple:
 
     Correct at small n, and unlike the normal approximation it cannot run past 0
     or 100.
+
+    The percentage is snapped back to a whole number of items first. A benchmark
+    score is a count divided by n, so 39.02% on 164 is 64 items and the interval
+    belongs to 64/164, not to 0.3902. The difference is about half a hundredth of a
+    point here — invisible at the two decimals anyone prints, and worth doing anyway
+    because recovering the count is the habit the whole section is arguing for.
     """
-    p = pct / 100.0
+    p = recover_count(pct, n) / n
     d = 1.0 + z * z / n
     centre = p + z * z / (2 * n)
     margin = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))

@@ -336,6 +336,23 @@ def test_prefix_reuse_is_block_granular():
     assert round(r2["real_fraction"], 2) == 0.71     # 96% at token level, 71% in blocks
 
 
+def test_wilson_uses_the_recovered_count():
+    """The interval belongs to 64/164, not to 0.3902.
+
+    A benchmark score is a count over n. Snapping the percentage back to an integer
+    before building the interval is the same habit the article argues for, and it is
+    what the browser calculators in docs/ do — they were written independently and
+    disagreed with this function until it was fixed, which is the point of having two
+    implementations of the same arithmetic.
+    """
+    from llm_inference_arithmetic import recover_count
+    assert recover_count(39.02, 164) == 64
+    lo, hi = wilson_interval(39.02, 164)
+    lo_exact, hi_exact = wilson_interval(100 * 64 / 164, 164)
+    assert (round(lo, 6), round(hi, 6)) == (round(lo_exact, 6), round(hi_exact, 6))
+    assert (round(lo, 3), round(hi, 3)) == (31.892, 46.660)
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
