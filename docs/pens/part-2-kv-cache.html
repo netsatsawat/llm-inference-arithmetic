@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What one conversation costs</title>
+<style>
+  :root{--cloth:#0B0C0E;--band:#171A1F;--well:#101318;--rule:rgba(237,234,227,.16);
+        --ink:#EDEAE3;--ink2:#B9B5AC;--ink3:#8B8880;--gold:#D4A843;--gold-ink:#A88434;--cool:#6E9FD4;
+        --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+        --mono:ui-monospace,Menlo,Consolas,monospace}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--cloth);color:var(--ink2);font-family:var(--sans);
+       font-size:15px;line-height:1.6;padding:1.25rem}
+  .k{font-family:var(--mono);font-size:.68rem;letter-spacing:.2em;color:var(--gold-ink);text-transform:uppercase}
+  h1{font-size:1.15rem;color:var(--ink);margin:.3rem 0 .2rem;letter-spacing:-.01em}
+  p.why{font-size:.88rem;color:var(--ink3);margin:0 0 1.1rem}
+  .c{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:.9rem 1.1rem}
+  label{display:block;font-family:var(--mono);font-size:.65rem;letter-spacing:.13em;
+        text-transform:uppercase;color:var(--ink3);margin-bottom:.3rem}
+  input[type=number],select{width:100%;background:var(--well);color:var(--ink);border:1px solid var(--rule);
+        border-radius:4px;padding:.45rem .55rem;font-family:var(--mono);font-size:.9rem}
+  input[type=range]{width:100%;accent-color:var(--gold)}
+  .v{font-family:var(--mono);color:var(--gold)}
+  .out{margin-top:1.1rem;border-top:1px solid var(--rule);padding-top:.9rem}
+  dl{display:grid;grid-template-columns:1fr auto;gap:.3rem 1rem;margin:0;font-family:var(--mono);font-size:.9rem}
+  dt{color:var(--ink3)} dd{margin:0;color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+  dd.b{color:var(--gold);font-size:1.05rem;font-weight:700}
+  .verdict{margin-top:.9rem;padding:.7rem .85rem;border-radius:5px;font-size:.9rem;
+           background:#1E2128;border-left:3px solid var(--ink3);color:var(--ink)}
+  .verdict.good{border-left-color:var(--gold)} .verdict.bad{border-left-color:var(--cool)}
+  svg{display:block;width:100%;height:auto}
+  a{color:var(--gold)}
+  footer{margin-top:1.2rem;font-size:.78rem;color:var(--ink3)}
+</style>
+
+<div class="k">llm inference · part two</div>
+<h1>What one conversation costs, and how many fit</h1>
+<p class="why">Two, times the layers whose cache grows, times the key-value heads, times the head
+dimension, times the bytes. Read <code>layer_types</code> first: layers that only see a sliding
+window stop growing, and counting them doubles your answer.</p>
+<div class="c">
+  <div><label for="L">Layers that grow</label><input type="number" id="L" value="18" min="1"></div>
+  <div><label for="H">Key-value heads</label><input type="number" id="H" value="8" min="1"></div>
+  <div><label for="D">Head dimension</label><input type="number" id="D" value="64" min="1"></div>
+  <div><label for="T">Cache precision</label><select id="T"><option value="2" selected>16-bit</option><option value="1">8-bit</option></select></div>
+  <div><label for="C">Context <span class="v" id="cv">128K</span></label><input type="range" id="C" min="10" max="17" value="17"></div>
+  <div><label for="B">KV budget, GiB</label><input type="number" id="B" value="75" min="1"></div>
+</div>
+<div class="out"><dl>
+  <dt>per token</dt><dd id="pt">—</dd>
+  <dt>per conversation</dt><dd id="pc">—</dd>
+  <dt>conversations that fit</dt><dd class="b" id="f">—</dd>
+</dl><div class="verdict" id="v"></div></div>
+<footer>From <em>LLM Inference, Measured</em>, part two.
+  Same arithmetic as a Python package and a CLI:
+  <a href="https://github.com/netsatsawat/llm-inference-arithmetic">llm-inference-arithmetic</a>.</footer>
+<script>
+"use strict";
+  const $=id=>document.getElementById(id);
+  const fmt=(x,d=0)=>x.toLocaleString("en-US",{minimumFractionDigits:d,maximumFractionDigits:d});
+  const GIB=1024**3;
+
+function go(){const per=2*+$("L").value*+$("H").value*+$("D").value*+$("T").value;
+  const ctx=2**+$("C").value,budget=+$("B").value;
+  const g=per*ctx/GIB,fits=Math.floor(budget/g);
+  $("cv").textContent=ctx>=1024?ctx/1024+"K":ctx;
+  $("pt").textContent=fmt(per)+" bytes = "+fmt(per/1024,0)+" KiB";
+  $("pc").textContent=g<1?fmt(g*1024,0)+" MiB":fmt(g,2)+" GiB";
+  $("f").textContent=fmt(fits);
+  const v=$("v");
+  if(fits<296){v.className="verdict bad";v.textContent=fits+" is below part one's dense ridge of 296, so the cache "+
+    "decided your batch size before the scheduler got a vote.";}
+  else{v.className="verdict good";v.textContent=fits+" clears the dense ridge of 296. Note that a mixture-of-experts model "+
+    "has a much further ridge on its expert layers.";}}
+["L","H","D","T","C","B"].forEach(i=>$(i).addEventListener("input",go));go();
+</script>
