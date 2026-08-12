@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "llm-inference-arithmetic"
+version = "0.1.0"
+description = "The four calculations that decide LLM serving performance, with the working shown."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Satsawat Natakarnkitkul" }]
+keywords = ["llm", "inference", "vllm", "roofline", "kv-cache", "quantization"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+lia = "llm_inference_arithmetic.cli:main"
+
+[project.urls]
+Homepage = "https://satsawat.ai"
+Source = "https://github.com/netsatsawat/llm-inference-arithmetic"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llm_inference_arithmetic"]
