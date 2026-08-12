@@ -7,9 +7,22 @@ is that you check it rather than trust it.
 Companion to the series *LLM Inference, Measured* — [satsawat.ai](https://satsawat.ai).
 
 ```bash
-pip install -e .
-python3 tests/test_arithmetic.py
+pip install git+https://github.com/netsatsawat/llm-inference-arithmetic
+lia model openai/gpt-oss-120b
 ```
+
+Or from a clone, which is the same thing plus the tests:
+
+```bash
+git clone https://github.com/netsatsawat/llm-inference-arithmetic
+cd llm-inference-arithmetic
+pip install .
+python3 tests/test_arithmetic.py        # 31 checks, no install needed for this one
+```
+
+Python 3.9 and up. `pip install -e .` needs **pip 21.3 or newer** — the build backend is
+hatchling, and editable installs for non-setuptools backends are PEP 660, which older pip
+does not implement. A plain `pip install .` works on any pip. Verified on 3.9.6.
 
 ## The four
 
