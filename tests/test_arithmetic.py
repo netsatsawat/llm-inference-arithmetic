@@ -2,7 +2,7 @@
 Tests that assert the published claims, not just the code.
 
 Every figure quoted in the series "LLM Inference, Measured" is pinned here. If a
-number in an article changes and this suite does not, one of them is wrong — which
+number in an article changes and this suite does not, one of them is wrong. That
 is the same contract tsfm-bakeoff's data generator uses: fail rather than let the
 prose and the arithmetic drift apart.
 
@@ -105,7 +105,7 @@ def test_dense_contrast_still_holds():
 
 
 def test_gqa_is_load_bearing():
-    """Without GQA gpt-oss-120b at 128K is 36 GiB rather than 4.5 — an 8x cut."""
+    """Without GQA gpt-oss-120b at 128K is 36 GiB rather than 4.5, an 8x cut."""
     no_gqa = _MS(layers=36, kv_heads=64, head_dim=64, growing_layers=18)
     assert round(kv_gib_per_sequence(no_gqa, 131072), 0) == 36
     assert 64 // 8 == 8
@@ -147,7 +147,7 @@ def test_decode_attention_intensity_is_the_group_size():
 
     gpt-oss-120b and Llama-3-70B both have 64 query heads over 8 KV heads, so decode
     attention sits at intensity 8, not 1. Still far below the ridge, so the argument
-    is unchanged — but 8 is the honest number, and it is the same 8x that GQA cuts
+    is unchanged, but 8 is the honest number, and it is the same 8x that GQA cuts
     the cache by.
     """
     assert 64 // GPT_OSS_120B.kv_heads == 8
@@ -194,52 +194,70 @@ def test_required_speedup_is_infinite_above_the_ceiling():
 
 # ── eval statistics ──────────────────────────────────────────────────────────
 
-def test_counts_recover_exactly_from_published_percentages():
-    """Both benchmarks round-trip, which is what identifies n in the first place."""
-    assert recover_count(39.02, 164) == 64
-    assert recover_count(31.10, 164) == 51
-    assert recover_count(70.24, 12032) == 8451
-    assert recover_count(68.66, 12032) == 8261
+# arXiv:2411.02355v4, Table 3, Llama-3.1-70B-Instruct. An earlier version of this file
+# pinned 39.02/31.10 and 70.24/68.66, which are not in that paper or any other I could
+# find. The arithmetic was right and the inputs were invented, which is the more
+# expensive of the two failures and the one no test suite catches for you.
+BF16_HE, INT4_HE, N_HE = 57.0, 56.3, 164
+BF16_MMLU, INT4_MMLU, N_MMLU = 48.1, 47.2, 12032
 
 
-def test_humaneval_gap_is_not_significant_unpaired():
-    """The finding that redrew the part-3 chart: 13 problems out of 164."""
-    z, p = two_proportion_test(39.02, 31.10, 164)
-    assert round(z, 2) == 1.50
-    assert round(p, 2) == 0.13
+def test_counts_recover_from_published_percentages():
+    """MMLU-Pro round-trips exactly. HumanEval cannot, and that is informative."""
+    assert recover_count(BF16_MMLU, N_MMLU) == 5787
+    assert recover_count(INT4_MMLU, N_MMLU) == 5679
+
+    # pass@1 is estimated from several samples per problem, so it is a mean rather
+    # than a count: no whole number of problems gives 57.0% of 164.
+    assert recover_count(BF16_HE, N_HE) == 93
+    assert recover_count(INT4_HE, N_HE) == 92
+    assert round(100 * 93 / N_HE, 2) == 56.71
+    assert round(100 * 94 / N_HE, 2) == 57.32
+
+
+def test_humaneval_gap_is_one_problem_and_proves_nothing():
+    """The entire INT4 code penalty in the source is a single problem."""
+    assert recover_count(BF16_HE, N_HE) - recover_count(INT4_HE, N_HE) == 1
+    z, p = two_proportion_test(BF16_HE, INT4_HE, N_HE)
+    assert round(z, 2) == 0.11
+    assert round(p, 2) == 0.91
     assert p > 0.05
 
 
-def test_mmlu_pro_gap_is_significant():
-    """The difference the first draft dismissed is the one that is real."""
-    z, p = two_proportion_test(70.24, 68.66, 12032)
-    assert round(z, 2) == 2.66
-    assert p < 0.01
+def test_mmlu_pro_gap_is_also_not_significant():
+    """108 questions out of 12,032, and a benchmark 73x larger still cannot see it."""
+    assert recover_count(BF16_MMLU, N_MMLU) - recover_count(INT4_MMLU, N_MMLU) == 108
+    z, p = two_proportion_test(BF16_MMLU, INT4_MMLU, N_MMLU)
+    assert round(z, 2) == 1.39
+    assert p > 0.05
 
 
-def test_humaneval_is_too_small_an_instrument():
-    assert min_n_for_difference(39.02, 31.10) == 279     # it has 164
+def test_neither_benchmark_is_large_enough():
+    # Computed from the published percentages. Feeding the recovered counts instead
+    # (93/164 rather than 57.0%) moves the HumanEval answer to ~50,800, because the
+    # rounding changes the gap from 0.70 points to 0.61. Either way the verdict is
+    # the same, and the spread is itself the reason to state which inputs you used.
+    assert 23_000 < min_n_for_difference(BF16_MMLU, INT4_MMLU) < 25_000   # has 12,032
+    assert min_n_for_difference(BF16_HE, INT4_HE) > 35_000                # has 164
 
 
 def test_wilson_intervals_show_instrument_precision():
-    """What the intervals actually say — including the bit that caught a bad caption.
+    """What the intervals actually say, including the bit that caught a bad caption.
 
     A first draft of the part-3 figure asserted "MMLU-Pro's intervals do not
-    overlap". They do, by 0.07 points, and the difference is still significant at
-    p = 0.008. Overlapping confidence intervals DO NOT imply non-significance: the
+    overlap". They do. Overlapping confidence intervals DO NOT imply non-significance: the
     eyeball test is strictly more conservative than the z-test. Non-overlap proves
     significance; overlap proves nothing.
     """
-    lo_a, hi_a = wilson_interval(39.02, 164)
-    lo_b, hi_b = wilson_interval(31.10, 164)
+    lo_a, hi_a = wilson_interval(BF16_HE, N_HE)
+    lo_b, hi_b = wilson_interval(INT4_HE, N_HE)
     assert hi_a - lo_a > 14                               # ~15 points wide
-    assert lo_a < hi_b                                    # and heavily overlapping
+    assert lo_a < hi_b                                    # and almost entirely overlapping
 
-    lo_c, hi_c = wilson_interval(70.24, 12032)
-    lo_d, hi_d = wilson_interval(68.66, 12032)
-    assert hi_c - lo_c < 2                                # ~1.6 points wide
-    assert 0 < hi_d - lo_c < 0.1                          # they touch, barely
-    assert two_proportion_test(70.24, 68.66, 12032)[1] < 0.01   # and still significant
+    lo_c, hi_c = wilson_interval(BF16_MMLU, N_MMLU)
+    lo_d, hi_d = wilson_interval(INT4_MMLU, N_MMLU)
+    assert hi_c - lo_c < 2                                # ~1.8 points wide
+    assert lo_c < hi_d                                    # 73x the items, still overlapping
 
 
 def test_mcnemar_cannot_be_settled_from_percentages():
@@ -337,20 +355,19 @@ def test_prefix_reuse_is_block_granular():
 
 
 def test_wilson_uses_the_recovered_count():
-    """The interval belongs to 64/164, not to 0.3902.
+    """The interval belongs to 93/164, not to 0.570.
 
     A benchmark score is a count over n. Snapping the percentage back to an integer
     before building the interval is the same habit the article argues for, and it is
-    what the browser calculators in docs/ do — they were written independently and
-    disagreed with this function until it was fixed, which is the point of having two
-    implementations of the same arithmetic.
+    what the browser calculators in docs/ do. They were written independently and
+    disagreed with this function until it was fixed, which is what having two
+    implementations of the same arithmetic is for.
     """
     from llm_inference_arithmetic import recover_count
-    assert recover_count(39.02, 164) == 64
-    lo, hi = wilson_interval(39.02, 164)
-    lo_exact, hi_exact = wilson_interval(100 * 64 / 164, 164)
+    assert recover_count(57.0, 164) == 93
+    lo, hi = wilson_interval(57.0, 164)
+    lo_exact, hi_exact = wilson_interval(100 * 93 / 164, 164)
     assert (round(lo, 6), round(hi, 6)) == (round(lo_exact, 6), round(hi_exact, 6))
-    assert (round(lo, 3), round(hi, 3)) == (31.892, 46.660)
 
 
 if __name__ == "__main__":

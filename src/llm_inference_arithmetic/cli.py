@@ -1,10 +1,10 @@
 """
-`lia` — the four calculations from the command line.
+`lia`: the four calculations from the command line.
 
     lia roofline --gpu h100-sxm --batch 32
     lia kv --layers 80 --kv-heads 8 --head-dim 128 --context 131072 --total 160 --weights 70
     lia amdahl --p 0.18 --speedup 2
-    lia eval --a 39.02 --b 31.10 --n 164
+    lia eval --a 57.0 --b 56.3 --n 164
 
 Deliberately verbose output: the intermediate values are the point. A tool that
 prints only the answer teaches nothing and cannot be checked.
@@ -30,9 +30,9 @@ from . import (
 def _roofline(a) -> None:
     tflops, bw, mem = GPUS[a.gpu]
     ridge = ridge_point(tflops, bw)
-    print(f"\n{a.gpu}: {tflops:g} TFLOP/s dense BF16, {bw:g} TB/s HBM, {mem} GiB\n")
+    print(f"\n{a.gpu}: {tflops:g} TFLOP/s dense BF16, {bw:g} TB/s HBM, {mem} GB\n")
     print(f"  ridge point            {ridge:.1f} FLOP/byte")
-    print(f"  (peak FLOPs / bandwidth — below this you are moving bytes, not multiplying)\n")
+    print(f"  (peak FLOPs / bandwidth, below this you are moving bytes, not multiplying)\n")
     for label, intensity in [
         (f"decode GEMMs, batch {a.batch}", decode_intensity(a.batch)),
         ("decode attention", 1.0),
@@ -43,7 +43,7 @@ def _roofline(a) -> None:
         bound = "compute-bound" if intensity >= ridge else "MEMORY-BOUND"
         print(f"  {label:<28} intensity {intensity:>8.0f}  ->  {got:6.1f} TFLOP/s ({pct:4.1f}% of peak)  {bound}")
     print(f"\n  batch needed to reach the ridge: {math.ceil(ridge)}")
-    print("  attention never gets there — each sequence reads its own KV cache.\n")
+    print("  attention never gets there: each sequence reads its own KV cache.\n")
 
 
 def _kv(a) -> None:
@@ -88,12 +88,18 @@ def _eval(a) -> None:
     print(f"\n  two-proportion z-test  z = {z:.2f}, p = {p:.4f}   {verdict}")
     need = min_n_for_difference(a.a, a.b)
     print(f"  n needed per arm       {need}   (you have {a.n})")
+    d = abs(ca - cb)
     print("\n  Note: if both arms were scored on the SAME items this is paired data and")
     print("  McNemar is the correct test. It needs the discordant counts, which a")
-    print("  published percentage does not preserve:")
-    d = ca - cb
-    for c in (0, max(0, d // 2), d):
+    print("  published percentage does not preserve. It preserves only the gap of")
+    print(f"  {d}, and the gap is not enough. Every row below has it, and the verdict")
+    print("  moves anyway (the test is symmetric, so only the sign is yours to drop):")
+    shown = set()
+    for c in (0, d // 2, d):
         b = d + c
+        if (b, c) in shown:
+            continue
+        shown.add((b, c))
         print(f"    b={b:<3} c={c:<3} -> exact p = {mcnemar_exact(b, c):.4f}")
     print("\n  Overlapping intervals do NOT imply non-significance. Non-overlap implies")
     print("  significance; overlap implies nothing.\n")
@@ -125,7 +131,7 @@ def _model(a):
     print(f"\n    KV cache                {per:,} bytes/token = {per / 1024:.0f} KiB")
     if d["sliding_layers"]:
         naive = 2 * d["layers"] * d["kv_heads"] * d["head_dim"] * a.dtype_bytes
-        print(f"      (all {d['layers']} layers would be {naive / 1024:.0f} KiB — {naive / per:.0f}x too high)")
+        print(f"      (all {d['layers']} layers would be {naive / 1024:.0f} KiB, {naive / per:.0f}x too high)")
     print()
     for ctx in (4096, 8192, 32768, 131072):
         g = per * ctx / GIB
@@ -149,6 +155,8 @@ def _plan(a):
                            name=a.name or "model")
     tflops, bw, mem_gb = GPUS[a.gpu]
     ridge = ridge_point(tflops, bw)
+    # GPUS holds spec-sheet GB (10^9), which is the unit plan() takes; it does the
+    # GiB conversion itself, so nothing is converted twice on the way in.
     gpu_gb = a.gpu_gb or mem_gb
     print(f"\n  {shape.name} on {a.gpus} x {a.gpu}, {a.context // 1024}K context\n")
     print(plan(shape, a.context, a.target, total_gb=a.gpus * gpu_gb,
@@ -168,7 +176,7 @@ def _moe(a):
     print(f"    ridge on {a.gpu:<14} {ridge:.0f}")
     print(f"    batch to reach it       {batch_for_ridge(ridge, a.fired, a.total):,}")
     print(f"\n    At batch {a.batch}, the expert layers sit at {expert_intensity(a.batch, a.fired, a.total):.1f}"
-          f" — {'past' if expert_intensity(a.batch, a.fired, a.total) >= ridge else 'still short of'} the ridge.\n")
+          f", {'past' if expert_intensity(a.batch, a.fired, a.total) >= ridge else 'still short of'} the ridge.\n")
 
 
 def _attention(a):
@@ -226,7 +234,7 @@ def _prefix(a):
             print(f"    {name:<14} {len(x)} vs {len(y)} tokens, {m['matching_tokens']} shared")
 
     print("\n  NOTE: tokenization is not universal. tiktoken covers OpenAI's encodings")
-    print("  only — Llama, Qwen, Mistral and Gemma each split text their own way, and")
+    print("  only. Llama, Qwen, Mistral and Gemma each split text their own way, and")
     print("  the same two strings can share a prefix under one and share nothing under")
     print("  another. Use the tokenizer belonging to the model you actually serve, or")
     print("  this number is about somebody else's deployment.\n")
@@ -273,7 +281,7 @@ def main(argv=None) -> int:
     pl.add_argument("--model-id", help="read the shape off the Hub instead of passing dims")
     pl.add_argument("--layers", type=int, default=36)
     pl.add_argument("--growing-layers", type=int, default=18,
-                    help="full-attention layers — the only ones whose cache grows")
+                    help="full-attention layers, the only ones whose cache grows")
     pl.add_argument("--name", default="gpt-oss-120b (defaults)")
     pl.add_argument("--kv-heads", type=int, default=8)
     pl.add_argument("--head-dim", type=int, default=64)

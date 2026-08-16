@@ -34,19 +34,19 @@
 <div class="k">llm inference · part four</div>
 <h1>Can the benchmark prove its own claim?</h1>
 <p class="why">Convert the percentages back into items before believing anything. This is the
-unpaired test — if both models were scored on the same items the correct test is McNemar's,
+unpaired test. If both models were scored on the same items the correct test is McNemar's,
 which needs per-item results, and this p-value is then an upper bound.</p>
 <div class="c">
-  <div><label for="a">Baseline, %</label><input type="number" id="a" value="39.02" step=".01"></div>
-  <div><label for="b">Comparison, %</label><input type="number" id="b" value="31.10" step=".01"></div>
+  <div><label for="a">Baseline, %</label><input type="number" id="a" value="57.0" step=".01"></div>
+  <div><label for="b">Comparison, %</label><input type="number" id="b" value="56.3" step=".01"></div>
   <div><label for="n">Items</label><input type="number" id="n" value="164" min="2"></div>
 </div>
 <div class="out"><dl>
-  <dt>counts</dt><dd id="c">—</dd>
-  <dt>difference</dt><dd id="d">—</dd>
-  <dt>95% interval, baseline</dt><dd id="ia">—</dd>
-  <dt>95% interval, comparison</dt><dd id="ib">—</dd>
-  <dt>unpaired p</dt><dd class="b" id="p">—</dd>
+  <dt>counts</dt><dd id="c">·</dd>
+  <dt>difference</dt><dd id="d">·</dd>
+  <dt>95% interval, baseline</dt><dd id="ia">·</dd>
+  <dt>95% interval, comparison</dt><dd id="ib">·</dd>
+  <dt>unpaired p</dt><dd class="b" id="p">·</dd>
 </dl><div class="verdict" id="v"></div></div>
 <footer>From <em>LLM Inference, Measured</em>, part four.
   Same arithmetic as a Python package and a CLI:
@@ -70,9 +70,9 @@ function go(){const n=Math.max(2,+$("n").value),xa=Math.round(+$("a").value/100*
   $("p").textContent=pv<.001?"< 0.001":fmt(pv,3);
   const ov=!(A[1]<B[0]||B[1]<A[0]),v=$("v");
   if(pv<.05){v.className="verdict good";v.textContent="Clears a conventional test"+
-    (ov?" — and the intervals still overlap, which is why overlap proves nothing.":".");}
+    (ov?", and the intervals still overlap, which is why overlap proves nothing.":".");}
   else{v.className="verdict bad";v.textContent="Not established by this test. A gap of "+fmt(Math.abs(xa-xb))+
-    " items on "+fmt(n)+" is inside what chance produces — but the unpaired test is conservative for paired data, "+
+    " items on "+fmt(n)+" is inside what chance produces, but the unpaired test is conservative for paired data, "+
     "so treat this as a ceiling on the evidence, not a verdict.";}}
 ["a","b","n"].forEach(i=>$(i).addEventListener("input",go));go();
 </script>

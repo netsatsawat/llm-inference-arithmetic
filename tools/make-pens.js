@@ -2,7 +2,7 @@
  * Standalone calculators, one per article.
  *
  * Medium does not accept HTML, iframes or scripts. It unfurls pasted URLs through
- * Embed.ly, which supports about 300 providers — CodePen and Observable among them,
+ * Embed.ly, which supports about 300 providers: CodePen and Observable among them,
  * a GitHub Pages URL not among them. So a link to docs/index.html becomes a link
  * card on Medium, and the only route to a *live* calculator inside a Medium story
  * is to host the same code somewhere Embed.ly already trusts.
@@ -83,16 +83,16 @@ are paying to move bytes rather than to multiply them.</p>
   <div><label for="g">GPU</label><select id="g"></select></div>
   <div><label for="b">Batch <span class="v" id="bv">32</span></label><input type="range" id="b" min="1" max="1024" value="32"></div>
   <div><label for="w">Bytes per weight</label><select id="w">
-    <option value="2" selected>2 — BF16</option><option value="1">1 — FP8</option><option value="0.5">0.5 — INT4</option></select></div>
+    <option value="2" selected>2 (BF16)</option><option value="1">1 (FP8)</option><option value="0.5">0.5 (INT4)</option></select></div>
 </div>
 <div class="out"><dl>
-  <dt>ridge point</dt><dd id="r">—</dd>
-  <dt>your intensity</dt><dd id="i">—</dd>
-  <dt>achievable</dt><dd class="b" id="p">—</dd>
+  <dt>ridge point</dt><dd id="r">·</dd>
+  <dt>your intensity</dt><dd id="i">·</dd>
+  <dt>achievable</dt><dd class="b" id="p">·</dd>
 </dl><div class="verdict" id="v"></div></div>`, `
 const G={"h100-sxm":[990,3.35,"H100 SXM"],"h200":[990,4.8,"H200"],"a100-80":[312,2.04,"A100 80GB SXM"],"l40s":[362,.864,"L40S"]};
 for(const[k,g]of Object.entries(G)){const o=document.createElement("option");o.value=k;
-  o.textContent=g[2]+" — "+g[0]+" TFLOP/s, "+g[1]+" TB/s";$("g").appendChild(o);}
+  o.textContent=g[2]+": "+g[0]+" TFLOP/s, "+g[1]+" TB/s";$("g").appendChild(o);}
 function go(){const[t,bw]=G[$("g").value],b=+$("b").value,by=+$("w").value;
   const ridge=t/bw,int=b*(2/by),pct=Math.min(100,int/ridge*100);
   $("bv").textContent=b;$("r").textContent=fmt(ridge,1)+" FLOP/byte";$("i").textContent=fmt(int);
@@ -100,7 +100,7 @@ function go(){const[t,bw]=G[$("g").value],b=+$("b").value,by=+$("w").value;
   const v=$("v");
   if(int>=ridge){v.className="verdict good";v.textContent="Compute-bound. The arithmetic is the limit, which is where you want to be.";}
   else{v.className="verdict bad";v.textContent="Memory-bound. Reaching the ridge would take a batch of "+fmt(Math.ceil(ridge/(2/by)))+
-    " — and attention never gets there whatever you do.";}}
+    ", and attention never gets there whatever you do.";}}
 ["g","b","w"].forEach(i=>$(i).addEventListener("input",go));go();`);
 
 /* ── part 2: the cache, and what fits ──────────────────────────────────────── */
@@ -119,9 +119,9 @@ window stop growing, and counting them doubles your answer.</p>
   <div><label for="B">KV budget, GiB</label><input type="number" id="B" value="75" min="1"></div>
 </div>
 <div class="out"><dl>
-  <dt>per token</dt><dd id="pt">—</dd>
-  <dt>per conversation</dt><dd id="pc">—</dd>
-  <dt>conversations that fit</dt><dd class="b" id="f">—</dd>
+  <dt>per token</dt><dd id="pt">·</dd>
+  <dt>per conversation</dt><dd id="pc">·</dd>
+  <dt>conversations that fit</dt><dd class="b" id="f">·</dd>
 </dl><div class="verdict" id="v"></div></div>`, `
 function go(){const per=2*+$("L").value*+$("H").value*+$("D").value*+$("T").value;
   const ctx=2**+$("C").value,budget=+$("B").value;
@@ -142,19 +142,19 @@ const evalStats = page('Can the benchmark prove its claim?', 'four', `
 <div class="k">llm inference · part four</div>
 <h1>Can the benchmark prove its own claim?</h1>
 <p class="why">Convert the percentages back into items before believing anything. This is the
-unpaired test — if both models were scored on the same items the correct test is McNemar's,
+unpaired test. If both models were scored on the same items the correct test is McNemar's,
 which needs per-item results, and this p-value is then an upper bound.</p>
 <div class="c">
-  <div><label for="a">Baseline, %</label><input type="number" id="a" value="39.02" step=".01"></div>
-  <div><label for="b">Comparison, %</label><input type="number" id="b" value="31.10" step=".01"></div>
+  <div><label for="a">Baseline, %</label><input type="number" id="a" value="57.0" step=".01"></div>
+  <div><label for="b">Comparison, %</label><input type="number" id="b" value="56.3" step=".01"></div>
   <div><label for="n">Items</label><input type="number" id="n" value="164" min="2"></div>
 </div>
 <div class="out"><dl>
-  <dt>counts</dt><dd id="c">—</dd>
-  <dt>difference</dt><dd id="d">—</dd>
-  <dt>95% interval, baseline</dt><dd id="ia">—</dd>
-  <dt>95% interval, comparison</dt><dd id="ib">—</dd>
-  <dt>unpaired p</dt><dd class="b" id="p">—</dd>
+  <dt>counts</dt><dd id="c">·</dd>
+  <dt>difference</dt><dd id="d">·</dd>
+  <dt>95% interval, baseline</dt><dd id="ia">·</dd>
+  <dt>95% interval, comparison</dt><dd id="ib">·</dd>
+  <dt>unpaired p</dt><dd class="b" id="p">·</dd>
 </dl><div class="verdict" id="v"></div></div>`, `
 function erf(x){const s=Math.sign(x);x=Math.abs(x);const t=1/(1+.3275911*x);
   return s*(1-((((1.061405429*t-1.453152027)*t+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x));}
@@ -169,9 +169,9 @@ function go(){const n=Math.max(2,+$("n").value),xa=Math.round(+$("a").value/100*
   $("p").textContent=pv<.001?"< 0.001":fmt(pv,3);
   const ov=!(A[1]<B[0]||B[1]<A[0]),v=$("v");
   if(pv<.05){v.className="verdict good";v.textContent="Clears a conventional test"+
-    (ov?" — and the intervals still overlap, which is why overlap proves nothing.":".");}
+    (ov?", and the intervals still overlap, which is why overlap proves nothing.":".");}
   else{v.className="verdict bad";v.textContent="Not established by this test. A gap of "+fmt(Math.abs(xa-xb))+
-    " items on "+fmt(n)+" is inside what chance produces — but the unpaired test is conservative for paired data, "+
+    " items on "+fmt(n)+" is inside what chance produces, but the unpaired test is conservative for paired data, "+
     "so treat this as a ceiling on the evidence, not a verdict.";}}
 ["a","b","n"].forEach(i=>$(i).addEventListener("input",go));go();`);
 
@@ -186,19 +186,19 @@ spent in it. The number you were quoted was measured on somebody else's workload
   <div><label for="s">Kernel speedup <span class="v" id="sv">2.0×</span></label><input type="range" id="s" min="11" max="100" value="20"></div>
 </div>
 <div class="out"><dl>
-  <dt>end to end</dt><dd class="b" id="e">—</dd>
-  <dt>ceiling, if it became free</dt><dd id="c">—</dd>
-  <dt>needed for 1.5× overall</dt><dd id="n">—</dd>
+  <dt>end to end</dt><dd class="b" id="e">·</dd>
+  <dt>ceiling, if it became free</dt><dd id="c">·</dd>
+  <dt>needed for 1.5× overall</dt><dd id="n">·</dd>
 </dl><div class="verdict" id="v"></div></div>`, `
 function go(){const p=+$("p").value/100,s=+$("s").value/10;
   $("pv").textContent=fmt(p*100,0)+"%";$("sv").textContent=fmt(s,1)+"×";
   const e=1/((1-p)+p/s),c=1/(1-p);
   $("e").textContent=fmt(e,2)+"×";$("c").textContent=fmt(c,2)+"×";
   const need=c<=1.5?null:p/(1/1.5-(1-p));
-  $("n").textContent=need===null?"impossible — the ceiling is "+fmt(c,2)+"×":fmt(need,1)+"×";
+  $("n").textContent=need===null?"impossible: the ceiling is "+fmt(c,2)+"×":fmt(need,1)+"×";
   const v=$("v");v.className=e>=1.25?"verdict good":"verdict bad";
   v.textContent="A "+fmt(s,1)+"× kernel on "+fmt(p*100,0)+"% of your time is "+fmt(e,2)+"× end to end. "+
-    (e<1.15?"Close to nothing, which is why speedups do not transfer.":"Worth having — but that is your p, not theirs.");}
+    (e<1.15?"Close to nothing, which is why speedups do not transfer.":"Worth having, but that is your p, not theirs.");}
 ["p","s"].forEach(i=>$(i).addEventListener("input",go));go();`);
 
 fs.mkdirSync(OUT, { recursive: true });

@@ -39,12 +39,12 @@ are paying to move bytes rather than to multiply them.</p>
   <div><label for="g">GPU</label><select id="g"></select></div>
   <div><label for="b">Batch <span class="v" id="bv">32</span></label><input type="range" id="b" min="1" max="1024" value="32"></div>
   <div><label for="w">Bytes per weight</label><select id="w">
-    <option value="2" selected>2 — BF16</option><option value="1">1 — FP8</option><option value="0.5">0.5 — INT4</option></select></div>
+    <option value="2" selected>2 (BF16)</option><option value="1">1 (FP8)</option><option value="0.5">0.5 (INT4)</option></select></div>
 </div>
 <div class="out"><dl>
-  <dt>ridge point</dt><dd id="r">—</dd>
-  <dt>your intensity</dt><dd id="i">—</dd>
-  <dt>achievable</dt><dd class="b" id="p">—</dd>
+  <dt>ridge point</dt><dd id="r">·</dd>
+  <dt>your intensity</dt><dd id="i">·</dd>
+  <dt>achievable</dt><dd class="b" id="p">·</dd>
 </dl><div class="verdict" id="v"></div></div>
 <footer>From <em>LLM Inference, Measured</em>, part one.
   Same arithmetic as a Python package and a CLI:
@@ -57,7 +57,7 @@ are paying to move bytes rather than to multiply them.</p>
 
 const G={"h100-sxm":[990,3.35,"H100 SXM"],"h200":[990,4.8,"H200"],"a100-80":[312,2.04,"A100 80GB SXM"],"l40s":[362,.864,"L40S"]};
 for(const[k,g]of Object.entries(G)){const o=document.createElement("option");o.value=k;
-  o.textContent=g[2]+" — "+g[0]+" TFLOP/s, "+g[1]+" TB/s";$("g").appendChild(o);}
+  o.textContent=g[2]+": "+g[0]+" TFLOP/s, "+g[1]+" TB/s";$("g").appendChild(o);}
 function go(){const[t,bw]=G[$("g").value],b=+$("b").value,by=+$("w").value;
   const ridge=t/bw,int=b*(2/by),pct=Math.min(100,int/ridge*100);
   $("bv").textContent=b;$("r").textContent=fmt(ridge,1)+" FLOP/byte";$("i").textContent=fmt(int);
@@ -65,6 +65,6 @@ function go(){const[t,bw]=G[$("g").value],b=+$("b").value,by=+$("w").value;
   const v=$("v");
   if(int>=ridge){v.className="verdict good";v.textContent="Compute-bound. The arithmetic is the limit, which is where you want to be.";}
   else{v.className="verdict bad";v.textContent="Memory-bound. Reaching the ridge would take a batch of "+fmt(Math.ceil(ridge/(2/by)))+
-    " — and attention never gets there whatever you do.";}}
+    ", and attention never gets there whatever you do.";}}
 ["g","b","w"].forEach(i=>$(i).addEventListener("input",go));go();
 </script>

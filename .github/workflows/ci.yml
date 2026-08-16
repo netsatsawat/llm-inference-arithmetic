@@ -1,0 +1,29 @@
+# CI runs everything: the package is standard library only, so there is nothing
+# to install but the package itself and nothing to mock. Nothing here touches the
+# network. `lia model` and `lia plan --model-id` read config.json off the Hub,
+# and neither the tests nor the claim verifier call them. Both work from the
+# config fixture committed in tests/test_arithmetic.py instead.
+# 3.9 is in the matrix because the README promises it.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install .
+      - name: the arithmetic, and the published figures pinned to it
+        run: python tests/test_arithmetic.py
+      - name: every README number matches its artifact
+        run: python scripts/verify_readme_claims.py
