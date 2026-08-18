@@ -9,10 +9,10 @@ question people usually answer with a vendor's number instead:
     amdahl      What is that kernel speedup actually worth end to end?
     evalstats   Can my benchmark resolve the difference I just reported?
 
-Pure Python, no dependencies. Every function is short enough to read, because the
-point is that you check it rather than trust it.
+Pure Python, no dependencies. Every function is short enough to read, so you can
+check it rather than trust it.
 
-Companion to the series "LLM Inference, Measured" — https://satsawat.ai
+Companion to the series "LLM Inference, Measured": https://satsawat.ai
 """
 
 from __future__ import annotations
@@ -29,9 +29,15 @@ TERA = 1e12
 # Reference hardware. Dense (non-sparse) tensor-core throughput and HBM bandwidth.
 # Vendors usually quote the sparsity-doubled FLOP number; these are the dense ones,
 # because you are not running structured sparsity.
+#
+# Memory is the vendor's headline figure, and `plan` consumes it as GB (10^9) and
+# converts to GiB itself. Be aware that this under-counts: an "80GB" H100 reports
+# about 79.7 GiB to nvidia-smi, which is nearer 85.5 GB, so a budget derived from
+# this table is roughly 7% conservative. The published worked example depends on
+# the convention, so it is stated here rather than quietly corrected.
 # ──────────────────────────────────────────────────────────────────────────────
 GPUS = {
-    #                 dense BF16 TFLOP/s,  HBM TB/s,  memory GiB
+    #                 dense BF16 TFLOP/s,  HBM TB/s,  memory GB
     "h100-sxm":       (990.0,              3.35,      80),
     "h100-pcie":      (756.0,              2.00,      80),
     "h200":           (990.0,              4.80,      141),
@@ -92,7 +98,7 @@ class ModelShape:
 
     ``growing_layers`` exists because not every layer's cache grows with the
     conversation. Models that interleave sliding-window attention with full
-    attention — gpt-oss-120b alternates them across all 36 of its layers — pay an
+    attention (gpt-oss-120b alternates them across all 36 of its layers) pay an
     unbounded per-token cost only on the full-attention half. The sliding half
     holds ``sliding_window`` tokens and then stops, forever.
 
@@ -100,7 +106,7 @@ class ModelShape:
     exactly the ratio of the two, which for gpt-oss-120b is a factor of two.
     """
     layers: int
-    kv_heads: int          # num_key_value_heads — NOT num_attention_heads
+    kv_heads: int          # num_key_value_heads, NOT num_attention_heads
     head_dim: int
     name: str = "model"
     growing_layers: int | None = None      # defaults to `layers`
@@ -131,8 +137,8 @@ class ModelShape:
 
 
 LLAMA3_70B = ModelShape(layers=80, kv_heads=8, head_dim=128, name="Llama-3-70B")
-# openai/gpt-oss-120b. Public, ungated config.json — which is why the article works
-# through this one: a reader can check every number without an account.
+# openai/gpt-oss-120b. Public, ungated config.json, so the article works through
+# this one: a reader can check every number without an account.
 GPT_OSS_120B = ModelShape(
     layers=36, kv_heads=8, head_dim=64, name="gpt-oss-120b",
     growing_layers=18, sliding_window=128,
@@ -179,9 +185,9 @@ def sequences_that_fit(
 ) -> int:
     """How many concurrent sequences the KV budget actually allows.
 
-    This — not the scheduler, not --max-num-seqs — is what caps your batch size,
-    and therefore your arithmetic intensity, and therefore whether you are
-    anywhere near the ridge point.
+    This is what caps your batch size, and therefore your arithmetic intensity,
+    and therefore whether you are anywhere near the ridge point. Not the
+    scheduler, and not --max-num-seqs.
     """
     free = total_gib - weights_gib
     if free <= 0:
@@ -210,7 +216,7 @@ def end_to_end_speedup(p: float, s: float) -> float:
 
 
 def speedup_ceiling(p: float) -> float:
-    """1 / (1 - p) — the best you can do if the optimised part becomes free.
+    """1 / (1 - p), the best you can do if the optimised part becomes free.
 
     Compute this before starting work. If it is 1.22x, no kernel will save you and
     the effort belongs at a different layer.
@@ -226,7 +232,6 @@ def required_kernel_speedup(p: float, target: float) -> float:
     Returns math.inf when the target is above the ceiling, which is the useful
     answer: it means stop.
     """
-    denom = p - (1.0 - (1.0 - p) * target) * 0.0 - (target * (1.0 - p))
     # target = 1/((1-p) + p/s)  =>  p/s = 1/target - (1-p)
     rhs = (1.0 / target) - (1.0 - p)
     if rhs <= 0:
@@ -246,9 +251,9 @@ def _norm_sf(z: float) -> float:
 def recover_count(pct: float, n: int) -> int:
     """Turn a reported percentage back into the number of items.
 
-    Do this before believing any delta. HumanEval reports 39.02% on 164 problems,
-    which is 64 problems. An "8-point drop" is then 13 problems, and 13 out of 164
-    is a very different claim from "8 points".
+    Do this before believing any delta. HumanEval reports 79.7% on 164 problems,
+    which is 131 problems; the 80.5% it rises to is 132. The whole gap is one problem,
+    and one problem out of 164 is a very different claim from "0.8 points".
     """
     return round(pct / 100.0 * n)
 
@@ -260,10 +265,10 @@ def wilson_interval(pct: float, n: int, z: float = 1.959964) -> tuple:
     or 100.
 
     The percentage is snapped back to a whole number of items first. A benchmark
-    score is a count divided by n, so 39.02% on 164 is 64 items and the interval
-    belongs to 64/164, not to 0.3902. The difference is about half a hundredth of a
-    point here — invisible at the two decimals anyone prints, and worth doing anyway
-    because recovering the count is the habit the whole section is arguing for.
+    score is a count divided by n, so 79.7% on 164 is 131 items and the interval
+    belongs to 131/164 rather than to 0.797. That moves each bound by about two
+    tenths of a point here. Small, and worth doing anyway, because recovering the
+    count is the habit the whole section is arguing for.
     """
     p = recover_count(pct, n) / n
     d = 1.0 + z * z / n
@@ -275,7 +280,7 @@ def wilson_interval(pct: float, n: int, z: float = 1.959964) -> tuple:
 def two_proportion_test(pct_a: float, pct_b: float, n: int) -> tuple:
     """Unpaired two-proportion z-test. Returns (z, p_value).
 
-    This is usually all a published evaluation gives you enough information for —
+    This is usually all a published evaluation gives you enough information for,
     and it is the wrong test when both models saw the same items. See mcnemar_exact.
     """
     a, b = recover_count(pct_a, n), recover_count(pct_b, n)
@@ -291,7 +296,9 @@ def two_proportion_test(pct_a: float, pct_b: float, n: int) -> tuple:
 def min_n_for_difference(pct_a: float, pct_b: float, z: float = 1.959964) -> int:
     """Items per arm needed to call this gap significant, unpaired.
 
-    A 7.9-point gap around 35% needs about 279. HumanEval has 164.
+    The 0.9-point MMLU-Pro gap in the README needs 23,661 questions per arm. The
+    benchmark has 12,032, so the difference it reports is below what it can resolve.
+    Run this before quoting a delta, not after someone questions it.
     """
     p1, p2 = pct_a / 100.0, pct_b / 100.0
     if p1 == p2:
@@ -304,12 +311,14 @@ def mcnemar_exact(b: int, c: int) -> float:
     """Exact two-tailed McNemar p-value for paired binary outcomes.
 
     b = items A got right and B got wrong; c = the reverse. The CORRECT test when
-    both models were scored on the same items — and the one you usually cannot run,
+    both models were scored on the same items, and the one you usually cannot run,
     because published percentages preserve only b - c.
 
-    At b=15, c=2 the answer is p=0.002. At b=30, c=17 — same net difference of 13 —
+    At b=15, c=2 the answer is p=0.002. At b=30, c=17 (same net difference of 13)
     it is p=0.079. Nobody can tell those apart from a percentage.
     """
+    if b < 0 or c < 0:
+        raise ValueError("b and c are counts of items and cannot be negative")
     n = b + c
     if n == 0:
         return 1.0

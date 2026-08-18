@@ -1,13 +1,13 @@
 # llm-inference-arithmetic
 
 **The four calculations that decide LLM serving performance.** No dependencies, no
-model downloads, no GPU. Every function is short enough to read, because the point
-is that you check it rather than trust it.
+model downloads, no GPU. Every function is short enough to read, so you can check
+it rather than trust it.
 
 **[Run the calculators in your browser →](https://netsatsawat.github.io/llm-inference-arithmetic/)**
 Same arithmetic, no install, nothing sent anywhere.
 
-Companion to the series *LLM Inference, Measured* — [satsawat.ai](https://satsawat.ai).
+Companion to the series *LLM Inference, Measured* at [satsawat.ai](https://satsawat.ai).
 
 ```bash
 pip install git+https://github.com/netsatsawat/llm-inference-arithmetic
@@ -20,10 +20,10 @@ Or from a clone, which is the same thing plus the tests:
 git clone https://github.com/netsatsawat/llm-inference-arithmetic
 cd llm-inference-arithmetic
 pip install .
-python3 tests/test_arithmetic.py        # 31 checks, no install needed for this one
+python3 tests/test_arithmetic.py        # 32 checks, no install needed for this one
 ```
 
-Python 3.9 and up. `pip install -e .` needs **pip 21.3 or newer** — the build backend is
+Python 3.9 and up. `pip install -e .` needs **pip 21.3 or newer**. The build backend is
 hatchling, and editable installs for non-setuptools backends are PEP 660, which older pip
 does not implement. A plain `pip install .` works on any pip. Verified on 3.9.6.
 
@@ -47,7 +47,7 @@ ridge_point(tflops, bandwidth)        # 295.5 FLOP per byte
 
 Below that, tensor cores idle waiting for HBM and faster arithmetic buys nothing.
 
-**In decode, arithmetic intensity *is* the batch size** — each weight is read once
+**In decode, arithmetic intensity *is* the batch size.** Each weight is read once
 and used for every sequence. So `decode_intensity(32) == 32`, and you would need a
 batch near 295 to saturate an H100.
 
@@ -61,13 +61,13 @@ cannot lift attention.
 ```python
 from llm_inference_arithmetic import LLAMA3_70B, kv_gib_per_sequence, sequences_that_fit
 
-kv_gib_per_sequence(LLAMA3_70B, 131072)                    # 40.0 GiB — one sequence
+kv_gib_per_sequence(LLAMA3_70B, 131072)                    # 40.0 GiB for one sequence
 sequences_that_fit(LLAMA3_70B, 131072, total_gib=160, weights_gib=70)   # 2
 sequences_that_fit(LLAMA3_70B, 8192,   total_gib=160, weights_gib=70)   # 36
 ```
 
 `2 × layers × kv_heads × head_dim × dtype_bytes` per token. For Llama-3-70B that is
-**320 KiB per token**, which at 128K context is 40 GiB for a single conversation —
+**320 KiB per token**, which at 128K context is 40 GiB for a single conversation,
 re-read in full on every decode step.
 
 **Your context length sets your batch size.** Not your scheduler, and not
@@ -92,9 +92,9 @@ Everything is **GiB**, deliberately. Dividing a KiB figure by 10⁶ is how 40 be
 ```python
 from llm_inference_arithmetic import end_to_end_speedup, speedup_ceiling
 
-end_to_end_speedup(p=0.18, s=2)    # 1.10  — attention is 18% of time
-end_to_end_speedup(p=0.85, s=2)    # 1.74  — attention is 85% of time
-speedup_ceiling(0.18)              # 1.22  — if attention became free
+end_to_end_speedup(p=0.18, s=2)    # 1.10 when attention is 18% of time
+end_to_end_speedup(p=0.85, s=2)    # 1.74 when attention is 85% of time
+speedup_ceiling(0.18)              # 1.22 if attention became free
 ```
 
 Same 2× kernel. Seven times the value, decided by a workload parameter rather than
@@ -103,40 +103,81 @@ will save that service and the effort belongs at another layer.
 
 ## 4. Can your benchmark prove your claim?
 
-This one exists because of a mistake. An article draft asserted that INT4 costs *"a
-fifth of your coding ability"*, on the widely-quoted 39.02% → 31.10% HumanEval drop.
+This one exists because of two mistakes, and each was worse than the one before it.
+
+The first: an article draft asserted that INT4 costs *"a fifth of your coding ability"*,
+on a table showing HumanEval falling 39.02% → 31.10%. The power check said the gap was
+thirteen problems out of 164 and did not reach significance. Correct, and beside the
+point, because those numbers are not in the paper they were attributed to, or in any
+other I could find.
+
+The second was found while checking the replacement. HumanEval 57.0% → 56.3% went in as
+the corrected pair. Both numbers are real, both sit in exactly the rows claimed, and
+both are the wrong column. In Table 3 the order runs `... MMLU-Pro | Arena-Hard
+Win-Rate | HumanEval pass@1 | HumanEval+ ...`, so reading one column short returns 57.0
+and 56.3 for a row whose HumanEval scores are 79.7 and 80.5. A fabricated number at
+least looks unfamiliar. A number lifted from the neighbouring column looks exactly like
+the number you wanted, because it is a real measurement of a real model.
+
+The direction reverses with it. INT4 does not lose ground on HumanEval at 70B, it scores
+slightly higher.
+
+The real figures, from *Give Me BF16 or Give Me Death?*
+([arXiv:2411.02355v4](https://arxiv.org/abs/2411.02355), Table 3, Llama-3.1-70B-Instruct,
+`HumanEval pass@1` and `MMLU-Pro 5-shot` columns):
 
 ```python
 from llm_inference_arithmetic import recover_count, two_proportion_test, min_n_for_difference
 
-recover_count(39.02, 164), recover_count(31.10, 164)   # (64, 51) — a 13-problem gap
-two_proportion_test(39.02, 31.10, 164)                 # z=1.50, p=0.13  — not significant
-min_n_for_difference(39.02, 31.10)                     # 279 problems needed; it has 164
+# HumanEval pass@1, 164 problems: BF16 79.7 -> W4A16 80.5
+recover_count(79.7, 164), recover_count(80.5, 164)   # (131, 132): a ONE-problem gap
+two_proportion_test(79.7, 80.5, 164)                 # z=-0.14, p=0.89: nowhere near
 
-two_proportion_test(70.24, 68.66, 12032)               # z=2.66, p=0.008 — MMLU-Pro IS real
+# MMLU-Pro 5-shot, 12,032 questions: BF16 48.1 -> W4A16 47.2
+two_proportion_test(48.1, 47.2, 12032)               # z=1.39, p=0.16: also not
+min_n_for_difference(48.1, 47.2)                     # 23,661 needed; it has 12,032
 ```
 
-The framing inverted: the aggregate that got waved away is the reliable measurement,
-and the code benchmark carrying the large effect is too small to prove it.
+Benchmark sizes are from the benchmarks, not from this paper: 164 problems from the
+Codex paper ([arXiv:2107.03374](https://arxiv.org/abs/2107.03374), §2.2), and 12,032 test
+questions from MMLU-Pro ([arXiv:2406.01574](https://arxiv.org/abs/2406.01574), §3.1).
+Every figure above is Llama-3.1-70B-Instruct; the same benchmarks read very differently
+at 8B and 405B, so a score quoted without its model cannot be checked by anyone.
+
+Neither benchmark separates its quantized model from 16-bit, and the paper agrees:
+FP8 *"effectively lossless across all model scales"*, INT8 a *"surprisingly low (1-3%)"*
+degradation, INT4 *"more competitive than expected, rivaling 8-bit quantization"*. Those
+three phrases are v2 and later; v1 words all three differently, which is why the citation
+above is pinned to a version.
+
+Three lessons, in ascending order of what they cost. Convert percentages to items before
+believing a delta. Check that the delta is in the source at all. And when it is, check
+that you read it out of the right column, because that is the failure that survives every
+sanity check you would think to run: the number is real, the row is right, the arithmetic
+on it is sound, and the conclusion is still backwards.
 
 **The correct test is one you usually cannot run.** Both models saw the same 164
-problems, so this is paired data and McNemar applies — and McNemar needs the
+problems, so this is paired data and McNemar applies. McNemar needs the
 discordant pairs, of which a published percentage preserves only the difference:
 
 ```python
 from llm_inference_arithmetic import mcnemar_exact
-mcnemar_exact(b=15, c=2)     # 0.0023  — significant
-mcnemar_exact(b=30, c=17)    # 0.0789  — not significant
+mcnemar_exact(b=15, c=2)     # 0.0023, significant
+mcnemar_exact(b=30, c=17)    # 0.0789, not significant
 ```
 
 Same net difference of 13. Opposite verdicts. Nobody can tell which world they are in
-from the numbers as published, which is why an evaluation report should carry
-discordant counts and almost never does.
+from the numbers as published. An evaluation report should carry discordant counts,
+and almost never does.
 
-**And overlapping intervals do not mean "no difference."** MMLU-Pro's two 95% Wilson
-intervals overlap by 0.07 of a point and the difference is still significant at
-p = 0.008. Non-overlap proves significance; overlap proves nothing. The test suite
-here caught that exact error in a chart caption.
+**And overlapping intervals do not mean "no difference."** Neither MMLU-Pro pair above
+demonstrates this, because neither is significant. So here is one that is, at the same
+n = 12,032. Scores of 50.0% and 48.7% give Wilson intervals of [49.11, 50.89] and
+[47.81, 49.60], overlapping by half a point, and a two-proportion test returns
+p = 0.044. Non-overlap proves significance; overlap proves nothing. Reading two error
+bars for a gap between them answers a different question than the one you asked, and
+answers it conservatively. The band where the intervals touch but the difference is
+real runs up to about p = 0.006.
 
 ## Embedding these
 
@@ -149,7 +190,7 @@ here caught that exact error in a chart caption.
 ```
 
 **Medium: not this page.** Medium accepts no HTML, no iframes and no scripts. It unfurls pasted
-URLs through Embed.ly, which knows about 300 providers — CodePen and Observable among them, a
+URLs through Embed.ly, which knows about 300 providers: CodePen and Observable among them, a
 GitHub Pages URL not among them. Paste a link to the page above into a Medium story and you get
 a link card, not a calculator.
 
@@ -173,10 +214,10 @@ the same theme and the same number formatting is four places for them to drift.
 ## Two implementations, on purpose
 
 `docs/index.html` is the same five calculations in JavaScript, written independently and
-served as a static page. That redundancy is the point: the two were compared field by
+served as a static page. The redundancy pays for itself: the two were compared field by
 field and disagreed on one, the Wilson interval, because the browser version snapped the
-percentage back to a whole number of items and the Python did not. 39.02% of 164 is 64
-items, and the interval belongs to 64/164 rather than to 0.3902. The Python was changed
+percentage back to a whole number of items and the Python did not. 79.7% of 164 is 131
+items, and the interval belongs to 131/164 rather than to 0.797. The Python was changed
 to match, and a test now pins it.
 
 A single implementation cannot catch that class of mistake. Two can.
@@ -184,7 +225,7 @@ A single implementation cannot catch that class of mistake. Two can.
 ## Tests assert the published claims
 
 Every figure quoted in the articles is pinned in `tests/`. If a number in an article
-changes and the suite does not, one of them is wrong — the same contract
+changes and the suite does not, one of them is wrong. That is the same contract
 [tsfm-bakeoff](https://github.com/netsatsawat/tsfm-bakeoff) uses for its benchmark
 data: fail rather than let the prose and the arithmetic drift apart.
 
@@ -221,16 +262,16 @@ lia model openai/gpt-oss-120b
       batch to reach 296    9,472
 
     KV cache                36,864 bytes/token = 36 KiB
-      (all 36 layers would be 72 KiB — 2x too high)
+      (all 36 layers would be 72 KiB, 2x too high)
 ```
 
-That last line is the point of the command. Reading `num_hidden_layers` and stopping
+That last line is why the command exists. Reading `num_hidden_layers` and stopping
 there overstates this model's cache by exactly 2x, because half its layers are
 sliding-window and stop growing. `layer_types` is the key that tells you, and it is
 easy to miss.
 
-A gated model raises rather than guesses. That is deliberate: the series moved off
-Llama-3 precisely because its config returns 401 to a reader without an account.
+A gated model raises rather than guesses. The series moved off Llama-3 precisely
+because its config returns 401 to a reader without an account.
 
 ## The capacity plan nobody writes
 
@@ -251,13 +292,20 @@ lia plan --model-id openai/gpt-oss-120b --context 131072 --target 32
 
 Defaults match vLLM: `gpu_memory_utilization` is 0.92, and the engine still wants
 activations and CUDA graph buffers on top. The verdict distinguishes the two failures
-that get confused — *does not fit* and *fits but cannot use the arithmetic* — because
+that get confused, *does not fit* and *fits but cannot use the arithmetic*, because
 only one of them is fixable by buying memory.
 
 **One honest wrinkle.** The derivation lands on 74.7 GiB and the articles round it to
 75, which moves two of the four published counts by one (533 vs 531, 266 vs 265).
 Rounding a budget and then flooring a division does that. Pass `--budget-gib 75` to
 reproduce the articles exactly. Both numbers are in the test suite.
+
+**A second one, about units.** Section 2 above is GiB throughout, but `plan` takes its
+card memory as GB (10⁹) and does the conversion itself, so the 80 in the GPU table is
+read as 80 GB rather than the ~79.7 GiB an "80GB" H100 actually reports. That makes the
+budget about 7% conservative. It is the convention the published example was computed
+under, so it stays; `--budget-gib` bypasses the derivation entirely if you would rather
+name the number yourself.
 
 ## The other three
 
@@ -287,6 +335,6 @@ cl100k_base   (GPT-4)     6 vs 6 tokens,  1 shared
 `What's` is one token in the first and two in the second, so the prompts diverge at
 position zero under one encoding and position one under the other. Run `--compare` to see
 it. If your model is outside the OpenAI family, tokenize with its own tokenizer and pass
-`--tokens-a/--tokens-b` — the package takes raw ids precisely so it never has to guess
+`--tokens-a/--tokens-b`. The package takes raw ids precisely so it never has to guess
 which vocabulary you are on. A reuse figure computed with the wrong tokenizer is a fact
 about somebody else's deployment.

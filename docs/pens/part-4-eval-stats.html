@@ -33,20 +33,25 @@
 
 <div class="k">llm inference · part four</div>
 <h1>Can the benchmark prove its own claim?</h1>
-<p class="why">Convert the percentages back into items before believing anything. This is the
-unpaired test — if both models were scored on the same items the correct test is McNemar's,
-which needs per-item results, and this p-value is then an upper bound.</p>
+<p class="why">Convert the percentages back into items before believing anything. The unpaired
+test assumes the two models were scored on different samples. They were scored on the same ones,
+so it is the wrong test, and its p-value is a ceiling rather than a verdict. The correct test is
+McNemar's, which needs to know how often the two models disagreed item by item. Published tables
+never carry that, so the last control lets you assume a rate and see what it would change.</p>
 <div class="c">
-  <div><label for="a">Baseline, %</label><input type="number" id="a" value="39.02" step=".01"></div>
-  <div><label for="b">Comparison, %</label><input type="number" id="b" value="31.10" step=".01"></div>
+  <div><label for="a">Baseline, %</label><input type="number" id="a" value="79.7" step=".01"></div>
+  <div><label for="b">Comparison, %</label><input type="number" id="b" value="80.5" step=".01"></div>
   <div><label for="n">Items</label><input type="number" id="n" value="164" min="2"></div>
+  <div><label for="k">They disagree on <span class="v" id="kv">15%</span></label><input type="range" id="k" min="1" max="60" value="15"></div>
 </div>
 <div class="out"><dl>
-  <dt>counts</dt><dd id="c">—</dd>
-  <dt>difference</dt><dd id="d">—</dd>
-  <dt>95% interval, baseline</dt><dd id="ia">—</dd>
-  <dt>95% interval, comparison</dt><dd id="ib">—</dd>
-  <dt>unpaired p</dt><dd class="b" id="p">—</dd>
+  <dt>counts</dt><dd id="c">·</dd>
+  <dt>difference</dt><dd id="d">·</dd>
+  <dt>95% interval, baseline</dt><dd id="ia">·</dd>
+  <dt>95% interval, comparison</dt><dd id="ib">·</dd>
+  <dt>items the unpaired test needs</dt><dd id="mn">·</dd>
+  <dt>unpaired p, a ceiling</dt><dd class="b" id="p">·</dd>
+  <dt>paired p, if they disagree that often</dt><dd class="b" id="pm">·</dd>
 </dl><div class="verdict" id="v"></div></div>
 <footer>From <em>LLM Inference, Measured</em>, part four.
   Same arithmetic as a Python package and a CLI:
@@ -62,17 +67,33 @@ function erf(x){const s=Math.sign(x);x=Math.abs(x);const t=1/(1+.3275911*x);
 const cdf=z=>.5*(1+erf(z/Math.SQRT2));
 function wil(x,n,z=1.959964){const p=x/n,d=1+z*z/n,c=(p+z*z/(2*n))/d,
   h=z/d*Math.sqrt(p*(1-p)/n+z*z/(4*n*n));return[Math.max(0,c-h)*100,Math.min(1,c+h)*100];}
+/* Same closed form as min_n_for_difference in the Python package. */
+function minN(a,b,z=1.959964){const p1=a/100,p2=b/100;if(p1===p2)return null;
+  const pool=(p1+p2)/2;return Math.ceil(2*pool*(1-pool)*Math.pow(z/(p1-p2),2));}
 function go(){const n=Math.max(2,+$("n").value),xa=Math.round(+$("a").value/100*n),xb=Math.round(+$("b").value/100*n);
-  $("c").textContent=xa+" and "+xb+" of "+fmt(n);$("d").textContent=fmt(Math.abs(xa-xb))+" items";
+  const gap=Math.abs(xa-xb);
+  $("c").textContent=xa+" and "+xb+" of "+fmt(n);$("d").textContent=fmt(gap)+(gap===1?" item":" items");
   const A=wil(xa,n),B=wil(xb,n);
   $("ia").textContent="["+fmt(A[0],2)+", "+fmt(A[1],2)+"]";$("ib").textContent="["+fmt(B[0],2)+", "+fmt(B[1],2)+"]";
+  const need=minN(+$("a").value,+$("b").value);
+  $("mn").textContent=need===null?"no gap to resolve":fmt(need)+(need>n?"  (has "+fmt(n)+")":"");
   const pool=(xa+xb)/(2*n),se=Math.sqrt(pool*(1-pool)*(2/n)),z=se>0?(xa/n-xb/n)/se:0,pv=2*(1-cdf(Math.abs(z)));
   $("p").textContent=pv<.001?"< 0.001":fmt(pv,3);
+  /* McNemar on the discordant pairs. b-c is the net gap, b+c is what nobody publishes.
+     z = (b-c)/sqrt(b+c), so the whole verdict turns on a quantity the table omits. */
+  const k=+$("k").value;$("kv").textContent=k+"%";
+  const m=Math.max(gap,Math.min(n,Math.round(k/100*n)));
+  const pm=gap>0?2*(1-cdf(gap/Math.sqrt(m))):1;
+  $("pm").textContent=(pm<.001?"< 0.001":fmt(pm,3))+"  on "+fmt(m)+" pairs";
   const ov=!(A[1]<B[0]||B[1]<A[0]),v=$("v");
-  if(pv<.05){v.className="verdict good";v.textContent="Clears a conventional test"+
-    (ov?" — and the intervals still overlap, which is why overlap proves nothing.":".");}
-  else{v.className="verdict bad";v.textContent="Not established by this test. A gap of "+fmt(Math.abs(xa-xb))+
-    " items on "+fmt(n)+" is inside what chance produces — but the unpaired test is conservative for paired data, "+
-    "so treat this as a ceiling on the evidence, not a verdict.";}}
-["a","b","n"].forEach(i=>$(i).addEventListener("input",go));go();
+  if(pv<.05){v.className="verdict good";v.textContent="Clears a conventional test even on the "+
+    "conservative reading"+(ov?", and the intervals still overlap, which is why overlap proves nothing.":".");}
+  else if(pm<.05){v.className="verdict bad";v.textContent="The ceiling says nothing, the paired test says "+
+    "otherwise. A gap of "+fmt(gap)+(gap===1?" item":" items")+" looks like noise against all "+fmt(n)+", but against the "+fmt(m)+
+    " items the two models actually answer differently it does not. This is why \"not significant\" is unsafe "+
+    "from a published table: the number that decides it was never printed.";}
+  else{v.className="verdict bad";v.textContent="Not established either way. A gap of "+fmt(gap)+(gap===1?" item on ":" items on ")+
+    fmt(n)+" stays inside what chance produces even when only "+fmt(m)+" items are in play"+
+    (need&&need>n?", and resolving it would take about "+fmt(need)+" items rather than "+fmt(n)+".":".");}}
+["a","b","n","k"].forEach(i=>$(i).addEventListener("input",go));go();
 </script>

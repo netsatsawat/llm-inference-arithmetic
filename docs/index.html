@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LLM inference arithmetic — run the numbers</title>
+<title>LLM inference arithmetic: run the numbers</title>
 <meta name="description" content="The four calculations that decide LLM serving performance, as live calculators. Roofline, KV cache, capacity, Amdahl, and whether your benchmark can prove its own claim.">
 <style>
   :root{
@@ -64,7 +64,7 @@
   <div class="kicker">llm-inference-arithmetic</div>
   <h1>Run the numbers yourself.</h1>
   <p>Five calculations that decide what an LLM deployment costs and how fast it feels.
-  Everything below runs in this page &mdash; no server, no GPU, no model download. The same
+  Everything below runs in this page. No server, no GPU, no model download. The same
   arithmetic is in the <a href="https://github.com/netsatsawat/llm-inference-arithmetic">Python
   package</a>, and its test suite asserts these figures, so if the two ever disagree one of
   them is wrong.</p>
@@ -89,9 +89,9 @@
     <div>
       <label for="rf-bytes">Bytes per weight</label>
       <select id="rf-bytes">
-        <option value="2" selected>2 &mdash; BF16/FP16</option>
-        <option value="1">1 &mdash; FP8</option>
-        <option value="0.5">0.5 &mdash; INT4/FP4</option>
+        <option value="2" selected>2 (BF16/FP16)</option>
+        <option value="1">1 (FP8)</option>
+        <option value="0.5">0.5 (INT4/FP4)</option>
       </select>
     </div>
   </div>
@@ -101,9 +101,9 @@
 
   <div class="out">
     <dl class="rows">
-      <dt>ridge point</dt><dd id="rf-ridge">&mdash;</dd>
-      <dt>your arithmetic intensity</dt><dd id="rf-int">&mdash;</dd>
-      <dt>achievable</dt><dd class="big" id="rf-pct">&mdash;</dd>
+      <dt>ridge point</dt><dd id="rf-ridge">·</dd>
+      <dt>your arithmetic intensity</dt><dd id="rf-int">·</dd>
+      <dt>achievable</dt><dd class="big" id="rf-pct">·</dd>
     </dl>
     <div class="verdict" id="rf-verdict"></div>
     <p class="note">Intensity is batch &times; (2 &divide; bytes-per-weight), so it equals the
@@ -131,7 +131,7 @@
 
   <div class="out">
     <dl class="rows">
-      <dt>per token</dt><dd class="big" id="kv-tok">&mdash;</dd>
+      <dt>per token</dt><dd class="big" id="kv-tok">·</dd>
     </dl>
     <figure><svg id="kv-chart" viewBox="0 0 720 170" role="img"
       aria-label="Cache size per conversation at four context lengths"></svg></figure>
@@ -161,9 +161,9 @@
 
   <div class="out">
     <dl class="rows">
-      <dt>KV budget</dt><dd id="cp-budget">&mdash;</dd>
-      <dt>per conversation</dt><dd id="cp-per">&mdash;</dd>
-      <dt>conversations that fit</dt><dd class="big" id="cp-fits">&mdash;</dd>
+      <dt>KV budget</dt><dd id="cp-budget">·</dd>
+      <dt>per conversation</dt><dd id="cp-per">·</dd>
+      <dt>conversations that fit</dt><dd class="big" id="cp-fits">·</dd>
     </dl>
     <div class="verdict" id="cp-verdict"></div>
     <p class="note">Uses the cache size from calculator 2 above, so change the model there and
@@ -191,9 +191,9 @@
 
   <div class="out">
     <dl class="rows">
-      <dt>end to end</dt><dd class="big" id="am-out">&mdash;</dd>
-      <dt>ceiling, if that part became free</dt><dd id="am-ceil">&mdash;</dd>
-      <dt>speedup needed for 1.5&times; overall</dt><dd id="am-need">&mdash;</dd>
+      <dt>end to end</dt><dd class="big" id="am-out">·</dd>
+      <dt>ceiling, if that part became free</dt><dd id="am-ceil">·</dd>
+      <dt>speedup needed for 1.5&times; overall</dt><dd id="am-need">·</dd>
     </dl>
     <div class="verdict" id="am-verdict"></div>
   </div>
@@ -206,23 +206,26 @@
   items is not a finding, however large the percentage gap looks.</p>
 
   <div class="controls">
-    <div><label for="ev-a">Baseline score, %</label><input type="number" id="ev-a" value="39.02" step="0.01"></div>
-    <div><label for="ev-b">Comparison score, %</label><input type="number" id="ev-b" value="31.10" step="0.01"></div>
+    <div><label for="ev-a">Baseline score, %</label><input type="number" id="ev-a" value="79.7" step="0.01"></div>
+    <div><label for="ev-b">Comparison score, %</label><input type="number" id="ev-b" value="80.5" step="0.01"></div>
     <div><label for="ev-n">Items in the benchmark</label><input type="number" id="ev-n" value="164" min="2"></div>
+    <div><label for="ev-k">The two disagree on <span class="v" id="ev-kv">15%</span> of items</label><input type="range" id="ev-k" min="1" max="60" value="15"></div>
   </div>
 
   <div class="out">
     <dl class="rows">
-      <dt>counts</dt><dd id="ev-counts">&mdash;</dd>
-      <dt>difference</dt><dd id="ev-diff">&mdash;</dd>
-      <dt>95% interval, baseline</dt><dd id="ev-cia">&mdash;</dd>
-      <dt>95% interval, comparison</dt><dd id="ev-cib">&mdash;</dd>
-      <dt>two-proportion p</dt><dd class="big" id="ev-p">&mdash;</dd>
+      <dt>counts</dt><dd id="ev-counts">·</dd>
+      <dt>difference</dt><dd id="ev-diff">·</dd>
+      <dt>95% interval, baseline</dt><dd id="ev-cia">·</dd>
+      <dt>95% interval, comparison</dt><dd id="ev-cib">·</dd>
+      <dt>items the unpaired test needs</dt><dd id="ev-need">·</dd>
+      <dt>two-proportion p, a ceiling</dt><dd class="big" id="ev-p">·</dd>
+      <dt>paired p, at that disagreement</dt><dd class="big" id="ev-pm">·</dd>
     </dl>
     <div class="verdict" id="ev-verdict"></div>
     <p class="note">Overlapping intervals prove nothing. Non-overlap implies significance;
     overlap does not imply its absence. If both models were scored on the same items the
-    correct test is McNemar's, which needs to know which items each one got wrong &mdash; and a
+    correct test is McNemar's, which needs to know which items each one got wrong, and a
     published percentage never carries that.</p>
   </div>
 </section>
@@ -231,7 +234,7 @@
   <p>The same arithmetic as a library and a CLI:
   <a href="https://github.com/netsatsawat/llm-inference-arithmetic">github.com/netsatsawat/llm-inference-arithmetic</a>.
   MIT, no dependencies.</p>
-  <p>Companion to the series <em>LLM Inference, Measured</em> &mdash;
+  <p>Companion to the series <em>LLM Inference, Measured</em> at
   <a href="https://satsawat.ai">satsawat.ai</a>.</p>
 </footer>
 
@@ -256,7 +259,7 @@ const GPUS = {
 const rfGpu = $("rf-gpu");
 for (const [k, g] of Object.entries(GPUS)) {
   const o = document.createElement("option");
-  o.value = k; o.textContent = `${g.label} — ${g.tflops} TFLOP/s, ${g.bw} TB/s`;
+  o.value = k; o.textContent = `${g.label}: ${g.tflops} TFLOP/s, ${g.bw} TB/s`;
   rfGpu.appendChild(o);
 }
 
@@ -290,7 +293,7 @@ function drawRoofline(ridge, intensity) {
   // where you are
   const a = achievable(intensity);
   s += `<circle cx="${lx(intensity)}" cy="${ly(a)}" r="7" fill="var(--gold)"/>`;
-  s += `<text x="${x0}" y="${y0 + 38}" style="font:11px var(--sans);fill:var(--ink3)">arithmetic intensity — FLOP per byte moved</text>`;
+  s += `<text x="${x0}" y="${y0 + 38}" style="font:11px var(--sans);fill:var(--ink3)">arithmetic intensity (FLOP per byte moved)</text>`;
   $("rf-chart").innerHTML = s;
 }
 
@@ -314,7 +317,7 @@ function roofline() {
   } else {
     v.className = "verdict bad";
     const need = Math.ceil(ridge / (2 / bytes));
-    v.textContent = `Memory-bound. You are moving bytes, not multiplying them. Reaching the ridge would take a batch of ${fmt(need)} — and attention never gets there whatever you do.`;
+    v.textContent = `Memory-bound. You are moving bytes, not multiplying them. Reaching the ridge would take a batch of ${fmt(need)}, and attention never gets there whatever you do.`;
   }
   drawRoofline(ridge, intensity);
 }
@@ -372,7 +375,7 @@ function capacity() {
     v.textContent = `SHORT by ${fmt(target - fits)}. No engine tuning rescues this: you need more memory, a smaller cache, or a shorter context.`;
   } else if (fits < ridge) {
     v.className = "verdict bad";
-    v.textContent = `Fits, but ${fmt(fits)} is under the ridge of ${fmt(ridge, 0)}. You will be bandwidth-bound — paying for arithmetic you cannot reach.`;
+    v.textContent = `Fits, but ${fmt(fits)} is under the ridge of ${fmt(ridge, 0)}. You will be bandwidth-bound, paying for arithmetic you cannot reach.`;
   } else {
     v.className = "verdict good";
     v.textContent = `Fits, and ${fmt(fits)} clears the ridge of ${fmt(ridge, 0)}.`;
@@ -395,7 +398,7 @@ function amdahl() {
   const want = 1.5;
   const need = ceil <= want ? null : p / (1 / want - (1 - p));
   $("am-need").textContent = need === null
-    ? `impossible — the ceiling is ${fmt(ceil, 2)}×`
+    ? `impossible: the ceiling is ${fmt(ceil, 2)}×`
     : `${fmt(need, 1)}×`;
 
   const v = $("am-verdict");
@@ -403,7 +406,7 @@ function amdahl() {
   v.textContent = `A ${fmt(s, 1)}× kernel on ${fmt(p * 100, 0)}% of your time is ${fmt(end, 2)}× end to end. `
     + (end < 1.15
       ? "That is close to nothing, and it is why speedups do not transfer between workloads."
-      : "Worth having — but the number a vendor quotes is their p, not yours.");
+      : "Worth having, but the number a vendor quotes is their p, not yours.");
 }
 
 /* ── 5. evaluation statistics ─────────────────────────────────────────────── */
@@ -434,21 +437,43 @@ function evalStats() {
   $("ev-cia").textContent = `[${fmt(la, 2)}, ${fmt(ua, 2)}]`;
   $("ev-cib").textContent = `[${fmt(lb, 2)}, ${fmt(ub, 2)}]`;
 
+  /* Same closed form as min_n_for_difference in the Python package. */
+  const need = a === b ? null
+    : Math.ceil(2 * ((a + b) / 2) * (1 - (a + b) / 2) * Math.pow(1.959964 / (a - b), 2));
+  $("ev-need").textContent = need === null ? "no gap to resolve"
+    : fmt(need) + (need > n ? `  (has ${fmt(n)})` : "");
+
   const pool = (xa + xb) / (2 * n);
   const se = Math.sqrt(pool * (1 - pool) * (2 / n));
   const z = se > 0 ? (xa / n - xb / n) / se : 0;
   const pv = 2 * (1 - normCdf(Math.abs(z)));
   $("ev-p").textContent = pv < 0.001 ? "< 0.001" : fmt(pv, 3);
 
+  /* McNemar on the discordant pairs: z = (b-c)/sqrt(b+c). The net difference b-c is
+     recoverable from the published percentages; b+c is not, and it decides the answer.
+     So the slider is an assumption, deliberately, and the row is labelled as one. */
+  const gap = Math.abs(xa - xb);
+  const k = +$("ev-k").value;
+  $("ev-kv").textContent = `${k}%`;
+  const m = Math.max(gap, Math.min(n, Math.round((k / 100) * n)));
+  const pm = gap > 0 ? 2 * (1 - normCdf(gap / Math.sqrt(m))) : 1;
+  $("ev-pm").textContent = `${pm < 0.001 ? "< 0.001" : fmt(pm, 3)}  on ${fmt(m)} pairs`;
+
   const overlap = !(ua < lb || ub < la);
   const v = $("ev-verdict");
   if (pv < 0.05) {
     v.className = "verdict good";
     v.textContent = `p = ${pv < 0.001 ? "< 0.001" : fmt(pv, 3)}. The difference clears a conventional test`
-      + (overlap ? " — and the intervals still overlap, which is why overlap proves nothing." : ".");
+      + (overlap ? ", and the intervals still overlap, which is why overlap proves nothing." : ".");
+  } else if (pm < 0.05) {
+    v.className = "verdict bad";
+    v.textContent = `The ceiling says p = ${fmt(pv, 3)} and the paired test says ${fmt(pm, 3)}. `
+      + `A gap of ${fmt(gap)} item${gap === 1 ? "" : "s"} looks like noise against all ${fmt(n)}, but not against `
+      + `the ${fmt(m)} the two models actually answer differently. This is why "not significant" is unsafe from a `
+      + "published table: the count that decides it was never printed.";
   } else {
     v.className = "verdict bad";
-    v.textContent = `p = ${fmt(pv, 3)}. Not established. A gap of ${fmt(Math.abs(xa - xb))} items on ${fmt(n)} `
+    v.textContent = `p = ${fmt(pv, 3)}. Not established. A gap of ${fmt(gap)} item${gap === 1 ? "" : "s"} on ${fmt(n)} `
       + "is inside what chance produces. The effect may well be real; this benchmark cannot show it.";
   }
 }
@@ -458,7 +483,7 @@ function evalStats() {
 ["kv-layers", "kv-heads", "kv-dim", "kv-dtype"].forEach((id) => $(id).addEventListener("input", kv));
 ["cp-gpus", "cp-gpugb", "cp-weights", "cp-util", "cp-ctx", "cp-target"].forEach((id) => $(id).addEventListener("input", capacity));
 ["am-p", "am-s"].forEach((id) => $(id).addEventListener("input", amdahl));
-["ev-a", "ev-b", "ev-n"].forEach((id) => $(id).addEventListener("input", evalStats));
+["ev-a", "ev-b", "ev-n", "ev-k"].forEach((id) => $(id).addEventListener("input", evalStats));
 
 roofline(); kv(); amdahl(); evalStats();
 </script>

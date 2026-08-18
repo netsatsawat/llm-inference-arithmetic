@@ -195,7 +195,7 @@ def prefix_reuse(a: list[int], b: list[int], block_size: int = 16) -> dict:
 
     Reports the token-level match and the block-level one, because only the second
     is real. vLLM matches on block boundaries, so a six-token match is zero blocks
-    and no reuse at all — a distinction that turns "13% reuse" into "none".
+    and no reuse at all, a distinction that turns "13% reuse" into "none".
     """
     n = 0
     for x, y in zip(a, b):

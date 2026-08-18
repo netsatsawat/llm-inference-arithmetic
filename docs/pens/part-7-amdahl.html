@@ -40,9 +40,9 @@ spent in it. The number you were quoted was measured on somebody else's workload
   <div><label for="s">Kernel speedup <span class="v" id="sv">2.0×</span></label><input type="range" id="s" min="11" max="100" value="20"></div>
 </div>
 <div class="out"><dl>
-  <dt>end to end</dt><dd class="b" id="e">—</dd>
-  <dt>ceiling, if it became free</dt><dd id="c">—</dd>
-  <dt>needed for 1.5× overall</dt><dd id="n">—</dd>
+  <dt>end to end</dt><dd class="b" id="e">·</dd>
+  <dt>ceiling, if it became free</dt><dd id="c">·</dd>
+  <dt>needed for 1.5× overall</dt><dd id="n">·</dd>
 </dl><div class="verdict" id="v"></div></div>
 <footer>From <em>LLM Inference, Measured</em>, part seven.
   Same arithmetic as a Python package and a CLI:
@@ -58,9 +58,9 @@ function go(){const p=+$("p").value/100,s=+$("s").value/10;
   const e=1/((1-p)+p/s),c=1/(1-p);
   $("e").textContent=fmt(e,2)+"×";$("c").textContent=fmt(c,2)+"×";
   const need=c<=1.5?null:p/(1/1.5-(1-p));
-  $("n").textContent=need===null?"impossible — the ceiling is "+fmt(c,2)+"×":fmt(need,1)+"×";
+  $("n").textContent=need===null?"impossible: the ceiling is "+fmt(c,2)+"×":fmt(need,1)+"×";
   const v=$("v");v.className=e>=1.25?"verdict good":"verdict bad";
   v.textContent="A "+fmt(s,1)+"× kernel on "+fmt(p*100,0)+"% of your time is "+fmt(e,2)+"× end to end. "+
-    (e<1.15?"Close to nothing, which is why speedups do not transfer.":"Worth having — but that is your p, not theirs.");}
+    (e<1.15?"Close to nothing, which is why speedups do not transfer.":"Worth having, but that is your p, not theirs.");}
 ["p","s"].forEach(i=>$(i).addEventListener("input",go));go();
 </script>
