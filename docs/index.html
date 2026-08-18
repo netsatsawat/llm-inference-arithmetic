@@ -209,6 +209,7 @@
     <div><label for="ev-a">Baseline score, %</label><input type="number" id="ev-a" value="79.7" step="0.01"></div>
     <div><label for="ev-b">Comparison score, %</label><input type="number" id="ev-b" value="80.5" step="0.01"></div>
     <div><label for="ev-n">Items in the benchmark</label><input type="number" id="ev-n" value="164" min="2"></div>
+    <div><label for="ev-k">The two disagree on <span class="v" id="ev-kv">15%</span> of items</label><input type="range" id="ev-k" min="1" max="60" value="15"></div>
   </div>
 
   <div class="out">
@@ -217,7 +218,9 @@
       <dt>difference</dt><dd id="ev-diff">·</dd>
       <dt>95% interval, baseline</dt><dd id="ev-cia">·</dd>
       <dt>95% interval, comparison</dt><dd id="ev-cib">·</dd>
-      <dt>two-proportion p</dt><dd class="big" id="ev-p">·</dd>
+      <dt>items the unpaired test needs</dt><dd id="ev-need">·</dd>
+      <dt>two-proportion p, a ceiling</dt><dd class="big" id="ev-p">·</dd>
+      <dt>paired p, at that disagreement</dt><dd class="big" id="ev-pm">·</dd>
     </dl>
     <div class="verdict" id="ev-verdict"></div>
     <p class="note">Overlapping intervals prove nothing. Non-overlap implies significance;
@@ -434,11 +437,27 @@ function evalStats() {
   $("ev-cia").textContent = `[${fmt(la, 2)}, ${fmt(ua, 2)}]`;
   $("ev-cib").textContent = `[${fmt(lb, 2)}, ${fmt(ub, 2)}]`;
 
+  /* Same closed form as min_n_for_difference in the Python package. */
+  const need = a === b ? null
+    : Math.ceil(2 * ((a + b) / 2) * (1 - (a + b) / 2) * Math.pow(1.959964 / (a - b), 2));
+  $("ev-need").textContent = need === null ? "no gap to resolve"
+    : fmt(need) + (need > n ? `  (has ${fmt(n)})` : "");
+
   const pool = (xa + xb) / (2 * n);
   const se = Math.sqrt(pool * (1 - pool) * (2 / n));
   const z = se > 0 ? (xa / n - xb / n) / se : 0;
   const pv = 2 * (1 - normCdf(Math.abs(z)));
   $("ev-p").textContent = pv < 0.001 ? "< 0.001" : fmt(pv, 3);
+
+  /* McNemar on the discordant pairs: z = (b-c)/sqrt(b+c). The net difference b-c is
+     recoverable from the published percentages; b+c is not, and it decides the answer.
+     So the slider is an assumption, deliberately, and the row is labelled as one. */
+  const gap = Math.abs(xa - xb);
+  const k = +$("ev-k").value;
+  $("ev-kv").textContent = `${k}%`;
+  const m = Math.max(gap, Math.min(n, Math.round((k / 100) * n)));
+  const pm = gap > 0 ? 2 * (1 - normCdf(gap / Math.sqrt(m))) : 1;
+  $("ev-pm").textContent = `${pm < 0.001 ? "< 0.001" : fmt(pm, 3)}  on ${fmt(m)} pairs`;
 
   const overlap = !(ua < lb || ub < la);
   const v = $("ev-verdict");
@@ -446,9 +465,15 @@ function evalStats() {
     v.className = "verdict good";
     v.textContent = `p = ${pv < 0.001 ? "< 0.001" : fmt(pv, 3)}. The difference clears a conventional test`
       + (overlap ? ", and the intervals still overlap, which is why overlap proves nothing." : ".");
+  } else if (pm < 0.05) {
+    v.className = "verdict bad";
+    v.textContent = `The ceiling says p = ${fmt(pv, 3)} and the paired test says ${fmt(pm, 3)}. `
+      + `A gap of ${fmt(gap)} item${gap === 1 ? "" : "s"} looks like noise against all ${fmt(n)}, but not against `
+      + `the ${fmt(m)} the two models actually answer differently. This is why "not significant" is unsafe from a `
+      + "published table: the count that decides it was never printed.";
   } else {
     v.className = "verdict bad";
-    v.textContent = `p = ${fmt(pv, 3)}. Not established. A gap of ${fmt(Math.abs(xa - xb))} items on ${fmt(n)} `
+    v.textContent = `p = ${fmt(pv, 3)}. Not established. A gap of ${fmt(gap)} item${gap === 1 ? "" : "s"} on ${fmt(n)} `
       + "is inside what chance produces. The effect may well be real; this benchmark cannot show it.";
   }
 }
@@ -458,7 +483,7 @@ function evalStats() {
 ["kv-layers", "kv-heads", "kv-dim", "kv-dtype"].forEach((id) => $(id).addEventListener("input", kv));
 ["cp-gpus", "cp-gpugb", "cp-weights", "cp-util", "cp-ctx", "cp-target"].forEach((id) => $(id).addEventListener("input", capacity));
 ["am-p", "am-s"].forEach((id) => $(id).addEventListener("input", amdahl));
-["ev-a", "ev-b", "ev-n"].forEach((id) => $(id).addEventListener("input", evalStats));
+["ev-a", "ev-b", "ev-n", "ev-k"].forEach((id) => $(id).addEventListener("input", evalStats));
 
 roofline(); kv(); amdahl(); evalStats();
 </script>
