@@ -44,6 +44,11 @@ import test_arithmetic as suite                               # noqa: E402
 # what the retraction paragraph says and to police where they are allowed to be.
 RETRACTED = ("39.02", "31.10", "70.24", "68.66")
 
+# The second class of bad figure: real numbers, correct row, wrong column. These are
+# Arena-Hard Win-Rate, which sits immediately left of HumanEval in Table 3. They are
+# more dangerous than the retracted four, because nothing about them looks invented.
+MISATTRIBUTED = ("57.0", "56.3")
+
 # Files that are allowed to contain them, and the only ones excluded from the sweep.
 # scripts/ is excluded because this file has to name them to check for them.
 SWEEP_SKIP_DIRS = {".git", "__pycache__", ".pytest_cache", ".impeccable",
@@ -66,14 +71,19 @@ def quotes(readme, label, text, detail=""):
           detail or "not found in README.md")
 
 
-def retracted_hits(text):
-    """(line number, figure) for every retracted figure in `text`. 1-based."""
+def hits_for(text, figures):
+    """(line number, figure) for every figure in `figures` found in `text`. 1-based."""
     hits = []
     for i, line in enumerate(text.splitlines(), 1):
-        for fig in RETRACTED:
+        for fig in figures:
             if re.search(r"(?<![\d.])" + re.escape(fig) + r"(?!\d)", line):
                 hits.append((i, fig))
     return hits
+
+
+def retracted_hits(text):
+    """(line number, figure) for every retracted figure in `text`. 1-based."""
+    return hits_for(text, RETRACTED)
 
 
 def plan_cli(context, budget=None):
@@ -131,14 +141,15 @@ def main() -> int:
     # the arithmetic are all pinned to one set of numbers from arXiv:2411.02355.
     a_he, b_he, n_he = suite.BF16_HE, suite.INT4_HE, suite.N_HE
     a_mp, b_mp, n_mp = suite.BF16_MMLU, suite.INT4_MMLU, suite.N_MMLU
-    quotes(readme, "the HumanEval row", f"HumanEval, {n_he} problems: BF16 {a_he} -> W4A16 {b_he}")
+    quotes(readme, "the HumanEval row",
+           f"HumanEval pass@1, {n_he} problems: BF16 {a_he} -> W4A16 {b_he}")
     quotes(readme, "the MMLU-Pro row",
-           f"MMLU-Pro, {n_mp:,} questions: BF16 {a_mp} -> W4A16 {b_mp}")
+           f"MMLU-Pro 5-shot, {n_mp:,} questions: BF16 {a_mp} -> W4A16 {b_mp}")
 
     counts = (recover_count(a_he, n_he), recover_count(b_he, n_he))
     quotes(readme, "the recovered counts", f"# ({counts[0]}, {counts[1]}): a ONE-problem gap")
-    check(f"the recovered gap really is one problem ({counts[0]} - {counts[1]})",
-          counts[0] - counts[1] == 1)
+    check(f"the recovered gap really is one problem, upward ({counts[0]} -> {counts[1]})",
+          counts[1] - counts[0] == 1)
 
     z_he, p_he = two_proportion_test(a_he, b_he, n_he)
     quotes(readme, "the HumanEval test", f"# z={z_he:.2f}, p={p_he:.2f}: nowhere near")
@@ -198,19 +209,25 @@ def main() -> int:
     if touch_p is not None:
         quotes(readme, "the p-value at that boundary", f"about p = {touch_p:.3f}")
 
-    print("the retracted figures, and nowhere but where they are retracted:")
+    print("the bad figures, and nowhere but where they are corrected:")
     lines = readme.splitlines()
     start = next((i for i, ln in enumerate(lines, 1)
-                  if "This one exists because of a mistake" in ln), None)
-    end = next((i for i, ln in enumerate(lines, 1) if "any other I could find." in ln), None)
-    check("the README still carries the retraction paragraph",
+                  if "This one exists because of two mistakes" in ln), None)
+    # The narrative ends where the sourced figures begin. Anchoring on that line rather
+    # than on a sentence keeps the check working when the prose is rewrapped.
+    end = next((i for i, ln in enumerate(lines, 1) if ln.startswith("The real figures, from")), None)
+    check("the README still carries the correction narrative",
           start is not None and end is not None and start < end, f"{start}..{end}")
+
     hits = retracted_hits(readme)
     check("the README names the retracted figures exactly twice",
           len(hits) == 2, f"{len(hits)} occurrence(s): {hits}")
+    mis = hits_for(readme, MISATTRIBUTED)
+    check("the README names the mis-attributed figures exactly four times",
+          len(mis) == 4, f"{len(mis)} occurrence(s): {mis}")
     if start and end:
-        stray = [h for h in hits if not start <= h[0] <= end]
-        check(f"...and only inside that paragraph (lines {start}-{end})",
+        stray = [h for h in hits + mis if not start <= h[0] < end]
+        check(f"...and every one of them inside the narrative (lines {start}-{end})",
               not stray, f"also at {stray}")
 
     tests_src = (REPO / "tests" / "test_arithmetic.py").read_text(encoding="utf-8")

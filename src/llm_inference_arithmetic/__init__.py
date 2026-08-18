@@ -251,9 +251,9 @@ def _norm_sf(z: float) -> float:
 def recover_count(pct: float, n: int) -> int:
     """Turn a reported percentage back into the number of items.
 
-    Do this before believing any delta. HumanEval reports 57.0% on 164 problems,
-    which is 93 problems; the 56.3% it drops to is 92. The whole gap is one problem,
-    and one problem out of 164 is a very different claim from "0.7 points".
+    Do this before believing any delta. HumanEval reports 79.7% on 164 problems,
+    which is 131 problems; the 80.5% it rises to is 132. The whole gap is one problem,
+    and one problem out of 164 is a very different claim from "0.8 points".
     """
     return round(pct / 100.0 * n)
 
@@ -265,8 +265,8 @@ def wilson_interval(pct: float, n: int, z: float = 1.959964) -> tuple:
     or 100.
 
     The percentage is snapped back to a whole number of items first. A benchmark
-    score is a count divided by n, so 57.0% on 164 is 93 items and the interval
-    belongs to 93/164 rather than to 0.570. That moves each bound by about three
+    score is a count divided by n, so 79.7% on 164 is 131 items and the interval
+    belongs to 131/164 rather than to 0.797. That moves each bound by about two
     tenths of a point here. Small, and worth doing anyway, because recovering the
     count is the habit the whole section is arguing for.
     """

@@ -103,35 +103,58 @@ will save that service and the effort belongs at another layer.
 
 ## 4. Can your benchmark prove your claim?
 
-This one exists because of a mistake, and the mistake turned out to be worse than the
-one it was built to catch. An article draft asserted that INT4 costs *"a fifth of your
-coding ability"*, on a table showing HumanEval falling 39.02% → 31.10%. The power check
-said the gap was thirteen problems out of 164 and did not reach significance. Correct,
-and beside the point: those numbers are not in the paper they were attributed to, or in
-any other I could find.
+This one exists because of two mistakes, and each was worse than the one before it.
 
-The real figures, from *Give Me BF16 or Give Me Death?* ([arXiv:2411.02355](https://arxiv.org/abs/2411.02355),
-Table 3, Llama-3.1-70B-Instruct):
+The first: an article draft asserted that INT4 costs *"a fifth of your coding ability"*,
+on a table showing HumanEval falling 39.02% → 31.10%. The power check said the gap was
+thirteen problems out of 164 and did not reach significance. Correct, and beside the
+point, because those numbers are not in the paper they were attributed to, or in any
+other I could find.
+
+The second was found while checking the replacement. HumanEval 57.0% → 56.3% went in as
+the corrected pair. Both numbers are real, both sit in exactly the rows claimed, and
+both are the wrong column. In Table 3 the order runs `... MMLU-Pro | Arena-Hard
+Win-Rate | HumanEval pass@1 | HumanEval+ ...`, so reading one column short returns 57.0
+and 56.3 for a row whose HumanEval scores are 79.7 and 80.5. A fabricated number at
+least looks unfamiliar. A number lifted from the neighbouring column looks exactly like
+the number you wanted, because it is a real measurement of a real model.
+
+The direction reverses with it. INT4 does not lose ground on HumanEval at 70B, it scores
+slightly higher.
+
+The real figures, from *Give Me BF16 or Give Me Death?*
+([arXiv:2411.02355v4](https://arxiv.org/abs/2411.02355), Table 3, Llama-3.1-70B-Instruct,
+`HumanEval pass@1` and `MMLU-Pro 5-shot` columns):
 
 ```python
 from llm_inference_arithmetic import recover_count, two_proportion_test, min_n_for_difference
 
-# HumanEval, 164 problems: BF16 57.0 -> W4A16 56.3
-recover_count(57.0, 164), recover_count(56.3, 164)   # (93, 92): a ONE-problem gap
-two_proportion_test(57.0, 56.3, 164)                 # z=0.11, p=0.91: nowhere near
+# HumanEval pass@1, 164 problems: BF16 79.7 -> W4A16 80.5
+recover_count(79.7, 164), recover_count(80.5, 164)   # (131, 132): a ONE-problem gap
+two_proportion_test(79.7, 80.5, 164)                 # z=-0.14, p=0.89: nowhere near
 
-# MMLU-Pro, 12,032 questions: BF16 48.1 -> W4A16 47.2
+# MMLU-Pro 5-shot, 12,032 questions: BF16 48.1 -> W4A16 47.2
 two_proportion_test(48.1, 47.2, 12032)               # z=1.39, p=0.16: also not
 min_n_for_difference(48.1, 47.2)                     # 23,661 needed; it has 12,032
 ```
 
-Neither benchmark separates its quantized model from 16-bit, and the paper agrees:
-FP8 lossless, INT8 1-3%, INT4 *"more competitive than expected, rivaling 8-bit
-quantization"*.
+Benchmark sizes are from the benchmarks, not from this paper: 164 problems from the
+Codex paper ([arXiv:2107.03374](https://arxiv.org/abs/2107.03374), §2.2), and 12,032 test
+questions from MMLU-Pro ([arXiv:2406.01574](https://arxiv.org/abs/2406.01574), §3.1).
+Every figure above is Llama-3.1-70B-Instruct; the same benchmarks read very differently
+at 8B and 405B, so a score quoted without its model cannot be checked by anyone.
 
-Two lessons, and the second one cost more. Convert percentages to items before
-believing a delta. And check that the delta is in the source at all. A number with a
-good story travels perfectly well without one.
+Neither benchmark separates its quantized model from 16-bit, and the paper agrees:
+FP8 *"effectively lossless across all model scales"*, INT8 a *"surprisingly low (1-3%)"*
+degradation, INT4 *"more competitive than expected, rivaling 8-bit quantization"*. Those
+three phrases are v2 and later; v1 words all three differently, which is why the citation
+above is pinned to a version.
+
+Three lessons, in ascending order of what they cost. Convert percentages to items before
+believing a delta. Check that the delta is in the source at all. And when it is, check
+that you read it out of the right column, because that is the failure that survives every
+sanity check you would think to run: the number is real, the row is right, the arithmetic
+on it is sound, and the conclusion is still backwards.
 
 **The correct test is one you usually cannot run.** Both models saw the same 164
 problems, so this is paired data and McNemar applies. McNemar needs the
@@ -193,8 +216,8 @@ the same theme and the same number formatting is four places for them to drift.
 `docs/index.html` is the same five calculations in JavaScript, written independently and
 served as a static page. The redundancy pays for itself: the two were compared field by
 field and disagreed on one, the Wilson interval, because the browser version snapped the
-percentage back to a whole number of items and the Python did not. 57.0% of 164 is 93
-items, and the interval belongs to 93/164 rather than to 0.570. The Python was changed
+percentage back to a whole number of items and the Python did not. 79.7% of 164 is 131
+items, and the interval belongs to 131/164 rather than to 0.797. The Python was changed
 to match, and a test now pins it.
 
 A single implementation cannot catch that class of mistake. Two can.

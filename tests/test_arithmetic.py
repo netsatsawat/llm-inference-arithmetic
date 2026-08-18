@@ -194,11 +194,15 @@ def test_required_speedup_is_infinite_above_the_ceiling():
 
 # ── eval statistics ──────────────────────────────────────────────────────────
 
-# arXiv:2411.02355v4, Table 3, Llama-3.1-70B-Instruct. An earlier version of this file
-# pinned 39.02/31.10 and 70.24/68.66, which are not in that paper or any other I could
-# find. The arithmetic was right and the inputs were invented, which is the more
-# expensive of the two failures and the one no test suite catches for you.
-BF16_HE, INT4_HE, N_HE = 57.0, 56.3, 164
+# arXiv:2411.02355v4, Table 3, Llama-3.1-70B-Instruct, columns `HumanEval pass@1` and
+# `MMLU-Pro 5-shot`. Two earlier versions of this file were wrong, in two different ways.
+# The first pinned 39.02/31.10 and 70.24/68.66, which are not in that paper or any other
+# I could find. The second pinned 57.0/56.3 as HumanEval: real numbers, right row, wrong
+# column. They are Arena-Hard Win-Rate, which sits immediately left of HumanEval, so
+# reading one column short returns them intact and reverses the sign of the finding.
+# No test suite catches either failure for you. Both were caught by going back to the
+# table and reading it column by column against its own header.
+BF16_HE, INT4_HE, N_HE = 79.7, 80.5, 164
 BF16_MMLU, INT4_MMLU, N_MMLU = 48.1, 47.2, 12032
 
 
@@ -208,19 +212,24 @@ def test_counts_recover_from_published_percentages():
     assert recover_count(INT4_MMLU, N_MMLU) == 5679
 
     # pass@1 is estimated from several samples per problem, so it is a mean rather
-    # than a count: no whole number of problems gives 57.0% of 164.
-    assert recover_count(BF16_HE, N_HE) == 93
-    assert recover_count(INT4_HE, N_HE) == 92
-    assert round(100 * 93 / N_HE, 2) == 56.71
-    assert round(100 * 94 / N_HE, 2) == 57.32
+    # than a count: no whole number of problems gives 79.7% of 164.
+    assert recover_count(BF16_HE, N_HE) == 131
+    assert recover_count(INT4_HE, N_HE) == 132
+    assert round(100 * 131 / N_HE, 2) == 79.88
+    assert round(100 * 132 / N_HE, 2) == 80.49
 
 
 def test_humaneval_gap_is_one_problem_and_proves_nothing():
-    """The entire INT4 code penalty in the source is a single problem."""
-    assert recover_count(BF16_HE, N_HE) - recover_count(INT4_HE, N_HE) == 1
+    """The entire INT4 code difference in the source is a single problem, upward.
+
+    The sign matters. Read from the correct column, W4A16 scores ABOVE BF16 here, so
+    the folklore about INT4 gutting code generation has the direction wrong as well as
+    the magnitude. One problem either way is not a finding.
+    """
+    assert recover_count(INT4_HE, N_HE) - recover_count(BF16_HE, N_HE) == 1
     z, p = two_proportion_test(BF16_HE, INT4_HE, N_HE)
-    assert round(z, 2) == 0.11
-    assert round(p, 2) == 0.91
+    assert round(z, 2) == -0.14
+    assert round(p, 2) == 0.89
     assert p > 0.05
 
 
@@ -234,11 +243,12 @@ def test_mmlu_pro_gap_is_also_not_significant():
 
 def test_neither_benchmark_is_large_enough():
     # Computed from the published percentages. Feeding the recovered counts instead
-    # (93/164 rather than 57.0%) moves the HumanEval answer to ~50,800, because the
-    # rounding changes the gap from 0.70 points to 0.61. Either way the verdict is
-    # the same, and the spread is itself the reason to state which inputs you used.
+    # (131/164 rather than 79.7%) moves the HumanEval answer from ~19,100 to ~32,800,
+    # because the rounding changes the gap from 0.80 points to 0.61. Either way the
+    # verdict is the same, and the spread is itself the reason to state which inputs
+    # you used.
     assert 23_000 < min_n_for_difference(BF16_MMLU, INT4_MMLU) < 25_000   # has 12,032
-    assert min_n_for_difference(BF16_HE, INT4_HE) > 35_000                # has 164
+    assert min_n_for_difference(BF16_HE, INT4_HE) > 15_000                # has 164
 
 
 def test_wilson_intervals_show_instrument_precision():
@@ -251,8 +261,13 @@ def test_wilson_intervals_show_instrument_precision():
     """
     lo_a, hi_a = wilson_interval(BF16_HE, N_HE)
     lo_b, hi_b = wilson_interval(INT4_HE, N_HE)
-    assert hi_a - lo_a > 14                               # ~15 points wide
+    assert hi_a - lo_a > 11                               # ~12 points wide
     assert lo_a < hi_b                                    # and almost entirely overlapping
+
+    # Narrower than the ~15 points the wrong column implied, and not because the
+    # benchmark improved. Binomial variance peaks at 50% and falls away either side,
+    # so the same 164 problems resolve a difference better at 80% than at 57%. The
+    # instrument's precision depends on where on the scale you are reading it.
 
     lo_c, hi_c = wilson_interval(BF16_MMLU, N_MMLU)
     lo_d, hi_d = wilson_interval(INT4_MMLU, N_MMLU)
@@ -364,9 +379,9 @@ def test_wilson_uses_the_recovered_count():
     implementations of the same arithmetic is for.
     """
     from llm_inference_arithmetic import recover_count
-    assert recover_count(57.0, 164) == 93
-    lo, hi = wilson_interval(57.0, 164)
-    lo_exact, hi_exact = wilson_interval(100 * 93 / 164, 164)
+    assert recover_count(79.7, 164) == 131
+    lo, hi = wilson_interval(79.7, 164)
+    lo_exact, hi_exact = wilson_interval(100 * 131 / 164, 164)
     assert (round(lo, 6), round(hi, 6)) == (round(lo_exact, 6), round(hi_exact, 6))
 
 

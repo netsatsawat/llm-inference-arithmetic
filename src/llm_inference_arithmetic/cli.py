@@ -4,7 +4,7 @@
     lia roofline --gpu h100-sxm --batch 32
     lia kv --layers 80 --kv-heads 8 --head-dim 128 --context 131072 --total 160 --weights 70
     lia amdahl --p 0.18 --speedup 2
-    lia eval --a 57.0 --b 56.3 --n 164
+    lia eval --a 79.7 --b 80.5 --n 164
 
 Deliberately verbose output: the intermediate values are the point. A tool that
 prints only the answer teaches nothing and cannot be checked.
