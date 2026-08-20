@@ -95,7 +95,7 @@
     <div class="flag">--max-num-seqs</div>
     <div class="dflt">1024 / 256 &nbsp;<em>by card</em></div>
     <div class="knob">A ceiling on the batch, not the batch you get.</div>
-    <div class="mv dn"><b>&#9660;</b><span>Shortens the queue on an interactive product. Costs throughput.</span></div>
+    <div class="mv dn"><b>&#9660;</b><span>Steadier per-token speed for those already in. Costs throughput, and lengthens the queue: the scheduler stops admitting at the ceiling.</span></div>
     <div class="mv up"><b>&#9650;</b><span>Rarely moves anything: capacity binds first. Exception, short contexts on a 256-default card.</span></div>
   </div>
 
@@ -154,7 +154,7 @@
     </table>
     <div class="note">Two tiers, not five cards: device memory, with one exception. Under 70&nbsp;GiB you get the
       smaller default, and the A100 gets it too, by name. Most people are serving, so most are on the shaded
-      column and do not know it.</div>
+      column and do not know it. Both token columns double if you run <span class="mono">--performance-mode throughput</span> and have not set them yourself.</div>
   </div>
 
   <div class="wall">
@@ -165,9 +165,9 @@
     <div class="branch"><div class="sig cap">CAPACITY</div>
       <div>Preemptions climbing under load you used to handle. The memory fence and the 8-bit cache are where the room is.</div></div>
     <div class="branch"><div class="sig lat">LATENCY</div>
-      <div>Far under the ridge, no preemptions. Capacity is fine and you are losing time elsewhere, so the concurrency ceiling and the token budget are the pair to move.</div></div>
+      <div>Far under the ridge, no preemptions, and still missing your target. Capacity is fine, so the concurrency ceiling and the token budget are the pair to move.</div></div>
     <div class="branch"><div class="sig ok">NEITHER</div>
-      <div>The defaults are already the right answer for you, which is the outcome nobody writes an article about.</div></div>
+      <div>Far under the ridge, no preemptions, and goodput where you want it. The defaults are already the right answer for you.</div></div>
   </div>
 </div>
 
