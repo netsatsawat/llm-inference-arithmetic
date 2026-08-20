@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>vLLM tuning cheat sheet</title>
+<style>
+  @page { size: A4 portrait; margin: 9mm 9mm; }
+  :root {
+    --cloth: #F4F1EA; --band: #E7E1D3; --rule: rgba(26,23,16,0.26);
+    --faint: rgba(26,23,16,0.09); --ink: #14120E; --ink2: #4A463D; --ink3: #6B665C;
+    --gold: #C9922B; --goldtext: #7A5A12; --cool: #2E6FB8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--cloth); color: var(--ink);
+    font: 8pt/1.26 Helvetica, Arial, sans-serif;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .kicker { font: 700 7pt/1 Menlo, monospace; letter-spacing: 2.4px; color: var(--goldtext); }
+  h1 { font-size: 17pt; margin: 4px 0 2px; letter-spacing: -0.2px; }
+  .lede { color: var(--ink2); font-size: 8.6pt; margin: 0 0 9px; }
+  h2 {
+    font-size: 8pt; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ink3);
+    margin: 9px 0 3px; padding-bottom: 2px; border-bottom: 1.5px solid var(--rule);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 7pt; letter-spacing: 1px; color: var(--ink3); padding: 0 6px 3px 0; }
+  td { padding: 3.5px 6px 3.5px 0; vertical-align: top; border-top: 1px solid var(--faint); }
+  code, .mono { font-family: Menlo, monospace; font-size: 7.8pt; color: var(--goldtext); font-weight: 700; }
+  .def { font-weight: 700; white-space: nowrap; }
+  .knob { color: var(--ink2); }
+  .move { color: var(--ink); }
+  .num { font-variant-numeric: tabular-nums; }
+  .cards td, .cards th { text-align: right; }
+  .cards td:first-child, .cards th:first-child { text-align: left; font-weight: 700; }
+  .cards .hi { background: var(--band); font-weight: 700; color: var(--goldtext); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+  ol { margin: 4px 0 0 15px; padding: 0; }
+  li { margin-bottom: 3px; }
+  .foot {
+    margin-top: 10px; padding-top: 6px; border-top: 1.5px solid var(--rule);
+    font-size: 7.4pt; color: var(--ink3); line-height: 1.45;
+  }
+  .wall { margin-top: 4px; }
+  .wall b { color: var(--ink); }
+</style>
+</head>
+<body>
+
+<div class="kicker">LLM INFERENCE, MEASURED &middot; PART FIVE</div>
+<h1>vLLM tuning cheat sheet</h1>
+<p class="lede">
+  Six settings, what each one is really a knob on, and which way to move it.
+  Every number here is <b>vLLM v0.27.1</b>. Defaults move between releases &mdash; check <span class="mono">vllm --version</span> first.
+</p>
+
+<h2>The six settings</h2>
+<table>
+  <tr><th style="width:20%">SETTING</th><th style="width:15%">DEFAULT</th><th style="width:25%">A KNOB ON</th><th>WHICH WAY TO MOVE IT</th></tr>
+  <tr>
+    <td><code>--max-num-seqs</code></td>
+    <td class="def num">1024 / 256</td>
+    <td class="knob">A ceiling on the batch, not the batch you get.</td>
+    <td class="move">Lower it to shorten the queue, and pay in throughput. Raising it usually does nothing, because capacity binds first &mdash; except at short contexts on a 256-default card.</td>
+  </tr>
+  <tr>
+    <td><code>--gpu-memory-utilization</code></td>
+    <td class="def num">0.92</td>
+    <td class="knob">The share of the card vLLM will touch at all. Weights, activation peak and graph buffers come out of <i>inside</i> it.</td>
+    <td class="move">0.95 is the cheapest capacity available, though nothing like the largest. You court fragmentation or a co-tenant, not a long request: one that cannot get blocks is preempted, not crashed.</td>
+  </tr>
+  <tr>
+    <td><code>--max-num-batched-tokens</code></td>
+    <td class="def num">16,384 / 8,192<br>8,192 / 2,048</td>
+    <td class="knob">The per-step budget. Requests already generating come off the top, one token each.</td>
+    <td class="move">Smaller protects the per-token speed of those already generating, at the newcomer's first token. Larger does the reverse. No setting is correct. Floor: at least <code>--max-num-seqs</code>.</td>
+  </tr>
+  <tr>
+    <td><code>--enable-prefix-caching</code></td>
+    <td class="def">on</td>
+    <td class="knob">Reuse, exact-match from the first token.</td>
+    <td class="move">You do not turn this on. Check nobody turned it off, and check the hit rate: a warm cache and a cold one measure two different products.</td>
+  </tr>
+  <tr>
+    <td><code>--kv-cache-dtype fp8</code></td>
+    <td class="def">off</td>
+    <td class="knob">Cache bytes. Halving them roughly doubles the conversations that fit.</td>
+    <td class="move">Take it for the capacity, then two checks: read the backend line, because one without FP8 support falls back quietly; and re-run your own eval, because the published accuracy evidence covers weights and activations, never the cache.</td>
+  </tr>
+  <tr>
+    <td><code>--enforce-eager</code></td>
+    <td class="def">off</td>
+    <td class="knob">Compile and CUDA graph capture. Fast start, slower decode.</td>
+    <td class="move">Development only. One exception: where capacity binds, the graph buffers it skips go back to the KV cache, so measure both ways.</td>
+  </tr>
+</table>
+
+<h2>The two defaults that depend on your card &mdash; v0.27.1</h2>
+<table class="cards">
+  <tr><th>CARD</th><th>--max-num-seqs</th><th>BATCHED TOKENS, OFFLINE</th><th class="hi">&hellip;THROUGH THE API SERVER</th></tr>
+  <tr><td>B200</td><td class="num">1024</td><td class="num">16,384</td><td class="num hi">8,192</td></tr>
+  <tr><td>H100</td><td class="num">1024</td><td class="num">16,384</td><td class="num hi">8,192</td></tr>
+  <tr><td>H200</td><td class="num">1024</td><td class="num">16,384</td><td class="num hi">8,192</td></tr>
+  <tr><td>A100</td><td class="num">256</td><td class="num">8,192</td><td class="num hi">2,048</td></tr>
+  <tr><td>L40S</td><td class="num">256</td><td class="num">8,192</td><td class="num hi">2,048</td></tr>
+</table>
+<p class="lede" style="font-size:7.8pt;margin:5px 0 0">
+  Two tiers, not five cards: device memory, with one exception. Under 70&nbsp;GiB you get the smaller default, and the A100 gets it too, by name. Most people are serving, so most have the highlighted number.
+</p>
+
+<div class="two">
+  <div>
+    <h2>What to measure</h2>
+    <ol>
+      <li><b>Time to first token</b> (TTFT) &mdash; prompt reading and queueing.</li>
+      <li><b>Time per output token</b> (TPOT) &mdash; memory bandwidth and batch size.</li>
+      <li><b>Throughput</b> &mdash; the aggregate.</li>
+      <li><b>Goodput</b> &mdash; throughput of requests that met your target. The only one that maps to money.</li>
+    </ol>
+    <p class="wall"><b>Which wall are you against?</b> Put <span class="mono">vllm:num_requests_running</span>
+    against part one's ridge point for your card &mdash; <span class="num">296</span> on an H100,
+    <span class="num">153</span> on an A100, <span class="num">419</span> on an L40S &mdash; and watch
+    <span class="mono">vllm:num_preemptions_total</span>.</p>
+  </div>
+  <div>
+    <h2>How to sweep it yourself</h2>
+    <ol>
+      <li><b>Pin your request shapes first.</b> Prompt lengths, output lengths, and how much your prompts share a prefix. If you cannot state those three, that is the task, not the tuning.</li>
+      <li><b>Then one setting at a time</b>, in this order: <code>--gpu-memory-utilization</code>, <code>--max-num-seqs</code>, <code>--max-num-batched-tokens</code>.</li>
+      <li><b>Re-read the KV cache line</b> in the startup log afterwards: the token budget sets the activation peak, and that peak comes out of the fence you set first.</li>
+      <li><b>Record p99 next to the median.</b> A setting that improves the median and wrecks the tail made your product worse.</li>
+      <li><b>Expect most of it to do nothing</b>, and write down what did not move, or you will sweep it again in six months.</li>
+    </ol>
+  </div>
+</div>
+
+<div class="foot">
+  Preemptions climbing under load you used to handle means capacity is binding, and the fence and the 8-bit cache are where the room is. Running far under the ridge with none means capacity is fine and you are losing latency elsewhere, so the ceiling and the token budget are the pair to move.<br>
+  Sources: the per-card numbers are <span class="mono">get_batch_defaults</span> in <span class="mono">vllm/engine/arg_utils.py</span>;
+  the 0.92 fence is the field default in <span class="mono">vllm/config/cache.py</span>; both read at tag <span class="mono">v0.27.1</span>.
+  From <i>Tuning vLLM: What Every Setting Does to the Arithmetic</i>, part five of <i>LLM Inference, Measured</i>, by Satsawat Natakarnkitkul.
+</div>
+
+</body>
+</html>
